@@ -45,3 +45,29 @@ $RECYCLE.BIN/
 Network Trash Folder
 Temporary Items
 .apdisk
+
+# =========================
+# Vim
+# =========================
+
+.*.swp
+*~
+
+# =========================
+# C Build Files
+# =========================
+
+**.o
+
+
+# =========================
+# Vita
+# =========================
+
+**.elf
+**.velf
+**.sfo
+**.vpk
+**.bin
+Client/VitaPad
+
