@@ -17,7 +17,7 @@
 #endif
 
 // Input
-#ifdef __WIN32__
+#if defined(__WIN32__) || defined(__CYGWIN__)
 #  include <windows.h>
 #else
 #  include <X11/Xlib.h>
@@ -25,7 +25,7 @@
 #endif
 
 // Keys
-#ifdef __WIN32__
+#if defined(__WIN32__) || defined(__CYGWIN__)
 // If you want to change mapping, look here: http://www.philipstorr.id.au/pcbook/book3/scancode.htm
 #define KEY_DOWN 0x1F
 #define KEY_UP 0x11
@@ -111,7 +111,7 @@ typedef struct{
 	uint8_t ry;
 } PadPacket;
 
-#ifdef __WIN32__
+#if defined(__WIN32__) || defined(__CYGWIN__)
 void SendButtonPress(int btn){
 	INPUT ip = { 0 };
 	ip.type = INPUT_KEYBOARD;
@@ -149,13 +149,13 @@ void SendButtonPress (Display* display, int btn) {
 #endif
 }
 
-#ifdef __WIN32__
-#define SEND_BUTTON_PRESS(...) SendButtonPress(...)
+#if defined(__WIN32__) || defined(__CYGWIN__)
+#define SEND_BUTTON_PRESS(x) SendButtonPress(x)
 #elif __linux__
 #define SEND_BUTTON_PRESS(...) SendButtonPress(display, __VA_ARGS__)
 #endif
 
-#ifdef __WIN32__
+#if defined(__WIN32__) || defined(__CYGWIN__)
 void SendButtonRelease(int btn){
 	INPUT ip = { 0 };
 	ip.type = INPUT_KEYBOARD;
@@ -193,8 +193,8 @@ void SendButtonRelease(Display* display, int btn){
 #endif
 }
 
-#ifdef __WIN32__
-#define SEND_BUTTON_RELEASE(...) SendButtonRelease(...)
+#if defined(__WIN32__) || defined(__CYGWIN__)
+#define SEND_BUTTON_RELEASE(x) SendButtonRelease(x)
 #elif __linux__
 #define SEND_BUTTON_RELEASE(...) SendButtonRelease(display, __VA_ARGS__)
 #endif
