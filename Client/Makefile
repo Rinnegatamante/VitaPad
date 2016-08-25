@@ -9,8 +9,8 @@ endif
 
 windows:
 	windres icon.rc -O coff -o icon.res
-	gcc -o VitaPad main.c icon.res -lws2_32
+	g++ -o VitaPad main.cpp tinyxml2.cpp icon.res -lws2_32 -fpermissive
 
 linux:
-	gcc -o VitaPad main.c -lX11
+	g++ -o VitaPad main.cpp tinyxml2.cpp -lX11 -fpermissive
 
