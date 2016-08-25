@@ -9,6 +9,10 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
+// PSVITA Related stuffs
+#define SCREEN_WIDTH 1920
+#define SCREEN_HEIGHT 1088
+
 // Sockets
 #ifdef __WIN32__
 # include <winsock2.h>
@@ -130,7 +134,10 @@ enum {
 	SCE_CTRL_CROSS      = 0x004000,	//!< Cross button.
 	SCE_CTRL_SQUARE     = 0x008000	//!< Square button.
 };
-
+#define NO_INPUT 0
+#define MOUSE_MOV 0x01
+#define LEFT_CLICK 0x08
+#define RIGHT_CLICK 0x10
 
 typedef struct{
 	uint32_t buttons;
@@ -138,7 +145,34 @@ typedef struct{
 	uint8_t ly;
 	uint8_t rx;
 	uint8_t ry;
+	uint16_t tx;
+	uint16_t ty;
+	uint8_t click;
 } PadPacket;
+
+void SendMoveMouse(int x, int y){
+	INPUT ip = { 0 };
+	ip.type = INPUT_MOUSE;
+	float x_molt = (1.0 * x)/SCREEN_WIDTH;
+	float y_molt = (1.0 * y)/SCREEN_HEIGHT;
+	ip.mi.dx = (x_molt*65535);
+	ip.mi.dy = (y_molt*65535);
+	ip.mi.mouseData = 0;
+	ip.mi.time = 0;
+	ip.mi.dwFlags = MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_MOVE;
+	SendInput(1, &ip, sizeof(INPUT));
+}
+
+void SendMouseEvent(uint16_t event){
+	INPUT ip = { 0 };
+	ip.type = INPUT_MOUSE;
+	ip.mi.dx = 0;
+	ip.mi.dy = 0;
+	ip.mi.mouseData = 0;
+	ip.mi.time = 0;
+	ip.mi.dwFlags = event;
+	SendInput(1, &ip, sizeof(INPUT));
+}
 
 #if defined(__WIN32__) || defined(__CYGWIN__)
 void SendButtonPress(int btn){
@@ -229,7 +263,7 @@ void SendButtonRelease(Display* display, int btn){
 #endif
 
 time_t getLastModifiedTime(char *path) {
-	#if __MINGW32__
+	#ifdef __MINGW32__
 	struct __stat64 attr;
 	__stat64(path, &attr);
 	return attr.st_mtime;
@@ -308,24 +342,24 @@ int main(int argc,char** argv){
 		// Checking if we need a mapping reload
 		time_t re_tick;
 		#ifdef __linux__
-			if ((re_tick = getLastModifiedTime("linux.xml")) != life_tick){
-				loadConfig("linux.xml");
-				life_tick = re_tick;
-				printf("\nConfig file reloaded since a modification has been detected.");
-			}
+		if ((re_tick = getLastModifiedTime("linux.xml")) != life_tick){
+			loadConfig("linux.xml");
+			life_tick = re_tick;
+			printf("\nConfig file reloaded since a modification has been detected.");
+		}
 		#else			
-			if ((re_tick = getLastModifiedTime("windows.xml")) != life_tick){
-				loadConfig("windows.xml");
-				life_tick = re_tick;
-				printf("\nConfig file reloaded since a modification has been detected.");
-			}
+		if ((re_tick = getLastModifiedTime("windows.xml")) != life_tick){
+			loadConfig("windows.xml");
+			life_tick = re_tick;
+			printf("\nConfig file reloaded since a modification has been detected.");
+		}
 		#endif
 		
 		send(my_socket->sock, "request", 8, 0);
 		int count = recv(my_socket->sock, (char*)&data, 256, 0);
 		if (firstScan){
 			firstScan = 0;
-			memcpy(&olddata,&data,8);
+			memcpy(&olddata,&data,16);
 		}
 
 		if (count != 0){
@@ -396,9 +430,18 @@ int main(int argc,char** argv){
 			else if ((olddata.rx > 170) && (!(data.rx > 170))) SEND_BUTTON_RELEASE(KEY_RANALOG_RIGHT);
 			if ((data.ry > 170) && (!(olddata.ry > 170))) SEND_BUTTON_PRESS(KEY_RANALOG_DOWN);
 			else if ((olddata.ry > 170) && (!(data.ry > 170))) SEND_BUTTON_RELEASE(KEY_RANALOG_DOWN);
-
+			
+			// Mouse emulation with touchscreen + retrotouch
+			if (data.click != NO_INPUT){			
+				if (data.click & MOUSE_MOV) SendMoveMouse(data.tx, data.ty);
+				if ((data.click & LEFT_CLICK) && (!(olddata.click & LEFT_CLICK))) SendMouseEvent(MOUSEEVENTF_LEFTDOWN);
+				else if ((olddata.click & LEFT_CLICK) && (!(data.click & LEFT_CLICK))) SendMouseEvent(MOUSEEVENTF_LEFTUP);
+				if ((data.click & RIGHT_CLICK) && (!(olddata.click & RIGHT_CLICK))) SendMouseEvent(MOUSEEVENTF_RIGHTDOWN);
+				else if ((olddata.click & RIGHT_CLICK) && (!(data.click & RIGHT_CLICK))) SendMouseEvent(MOUSEEVENTF_RIGHTUP);
+			}
+			
 			// Saving old pad status
-			memcpy(&olddata,&data,8);
+			memcpy(&olddata,&data,sizeof(PadPacket));
 		}
 	}
 

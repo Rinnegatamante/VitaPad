@@ -2,18 +2,41 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include <string.h>
 #include <psp2/ctrl.h>
 #include <psp2/types.h>
 #include <psp2/net/net.h>
 #include <psp2/net/netctl.h>
 #include <psp2/sysmodule.h>
+#include <psp2/touch.h>
 #include <psp2/kernel/threadmgr.h>
 #define GAMEPAD_PORT 5000
 #define NET_INIT_SIZE 1*1024*1024
 
+// PadPacket struct
+typedef struct{
+	uint32_t buttons;
+	uint8_t lx;
+	uint8_t ly;
+	uint8_t rx;
+	uint8_t ry;
+	uint16_t tx;
+	uint16_t ty;
+	uint8_t click;
+} PadPacket;
+
+// Values for click value
+#define NO_INPUT 0x00
+#define MOUSE_MOV 0x01
+#define LEFT_CLICK 0x08
+#define RIGHT_CLICK 0x10
+
 // Server thread
 volatile int connected = 0;
 static int server_thread(unsigned int args, void* argp){
+	
+	// Initializing a PadPacket
+	PadPacket pkg;
 	
 	// Initializing a socket
 	int fd = sceNetSocket("VitaPad", SCE_NET_AF_INET, SCE_NET_SOCK_STREAM, 0);
@@ -35,7 +58,20 @@ static int server_thread(unsigned int args, void* argp){
 				sceNetRecv(client,unused,256,0);
 				SceCtrlData pad;
 				sceCtrlPeekBufferPositive(0, &pad, 1);
-				sceNetSend(client, &pad.buttons, 8, 0); // Sending buttons + analogs state
+				SceTouchData touch;
+				sceTouchPeek(SCE_TOUCH_PORT_FRONT, &touch, 1);
+				SceTouchData retro;
+				sceTouchPeek(SCE_TOUCH_PORT_BACK, &retro, 1);
+				memcpy(&pkg, &pad.buttons, 8); // Buttons + analogs state
+				memcpy(&pkg.tx, &touch.report[0].x, 4); // Touch state
+				uint8_t flags = NO_INPUT;
+				if (touch.reportNum > 0) flags += MOUSE_MOV;
+				if (retro.reportNum > 0){
+					if (retro.report[0].x > 960) flags += RIGHT_CLICK;
+					else flags += LEFT_CLICK;
+				}
+				pkg.click = flags;
+				sceNetSend(client, &pkg, sizeof(PadPacket), 0); // Sending PadPacket
 			}
 		}
 	}
@@ -48,8 +84,10 @@ uint32_t text_color;
 
 int main(){
 	
-	// Enabling analog support
+	// Enabling analog and touch support
 	sceCtrlSetSamplingMode(SCE_CTRL_MODE_ANALOG);
+	sceTouchSetSamplingState(SCE_TOUCH_PORT_FRONT, 1);
+	sceTouchSetSamplingState(SCE_TOUCH_PORT_BACK, 1);
 	
 	// Initializing graphics stuffs
 	vita2d_init();
@@ -83,7 +121,7 @@ int main(){
 		
 		vita2d_start_drawing();
 		vita2d_clear_screen();
-		vita2d_pgf_draw_text(debug_font, 2, 20, text_color, 1.0, "VitaPad v.1.0 by Rinnegatamante");
+		vita2d_pgf_draw_text(debug_font, 2, 20, text_color, 1.0, "VitaPad v.1.1 by Rinnegatamante");
 		vita2d_pgf_draw_textf(debug_font, 2, 60, text_color, 1.0, "Listening on:\nIP: %s\nPort: %d",vita_ip,GAMEPAD_PORT);
 		vita2d_pgf_draw_textf(debug_font, 2, 200, text_color, 1.0, "Status: %s",connected ? "Connected!" : "Waiting connection...");
 		vita2d_end_drawing();
