@@ -5,6 +5,9 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <stdint.h>
+#include <time.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 // Sockets
 #ifdef __WIN32__
@@ -37,7 +40,10 @@ void loadConfig(char* path)
 	
 	// Loading XML file
 	tinyxml2::XMLDocument doc;
-	doc.LoadFile(path);
+	if (doc.LoadFile(path) != tinyxml2::XML_NO_ERROR){
+		printf("\nERROR: An error occurred while opening config file.");
+		return;
+	}
 	
 	// Getting elements
 	tinyxml2::XMLElement* k1 = doc.FirstChildElement("KEY_DOWN");
@@ -103,34 +109,6 @@ void loadConfig(char* path)
 	
 }
 
-#ifdef __linux__
-// If you want to change mapping, look at /usr/include/X11/keysymdef.h
-#define KEY_DOWN XK_S
-#define KEY_UP XK_W
-#define KEY_LEFT XK_A
-#define KEY_RIGHT XK_D
-
-#define KEY_TRIANGLE XK_I
-#define KEY_SQUARE XK_J
-#define KEY_CROSS XK_K
-#define KEY_CIRCLE XK_L
-
-#define KEY_L XK_Control_L
-#define KEY_R XK_space
-#define KEY_START XK_Return
-#define KEY_SELECT XK_Shift_L
-
-#define KEY_LANALOG_UP XK_Up
-#define KEY_LANALOG_LEFT XK_Left
-#define KEY_LANALOG_RIGHT XK_Right
-#define KEY_LANALOG_DOWN XK_Down
-
-#define KEY_RANALOG_UP XK_8
-#define KEY_RANALOG_LEFT XK_4
-#define KEY_RANALOG_RIGHT XK_6
-#define KEY_RANALOG_DOWN XK_2
-#endif
-
 #define u32 uint32_t
 #define GAMEPAD_PORT 5000
 typedef struct{
@@ -150,8 +128,7 @@ enum {
 	SCE_CTRL_TRIANGLE   = 0x001000,	//!< Triangle button.
 	SCE_CTRL_CIRCLE     = 0x002000,	//!< Circle button.
 	SCE_CTRL_CROSS      = 0x004000,	//!< Cross button.
-	SCE_CTRL_SQUARE     = 0x008000,	//!< Square button.
-	SCE_CTRL_ANY        = 0x010000	//!< Any input intercepted.
+	SCE_CTRL_SQUARE     = 0x008000	//!< Square button.
 };
 
 
@@ -251,6 +228,19 @@ void SendButtonRelease(Display* display, int btn){
 #define SEND_BUTTON_RELEASE(...) SendButtonRelease(display, __VA_ARGS__)
 #endif
 
+time_t getLastModifiedTime(char *path) {
+	#if __MINGW32__
+	struct __stat64 attr;
+	__stat64(path, &attr);
+	return attr.st_mtime;
+	#else
+	struct stat attr;
+	stat(path, &attr);
+	return attr.st_mtime;
+	#endif
+}
+
+
 int main(int argc,char** argv){
 	#ifdef __WIN32__
 	WORD versionWanted = MAKEWORD(1, 1);
@@ -265,10 +255,13 @@ int main(int argc,char** argv){
     #endif
 	
 	// Loading mapping
+	time_t life_tick = 0;
 	#ifdef __linux__
 		loadConfig("linux.xml");
+		life_tick = getLastModifiedTime("linux.xml");
 	#else
 		loadConfig("windows.xml");
+		life_tick = getLastModifiedTime("windows.xml");
 	#endif
 	
 	printf("VitaPad Client by Rinnegatamante\n\n");
@@ -311,6 +304,23 @@ int main(int argc,char** argv){
 	PadPacket olddata;
 
 	for (;;){
+	
+		// Checking if we need a mapping reload
+		time_t re_tick;
+		#ifdef __linux__
+			if ((re_tick = getLastModifiedTime("linux.xml")) != life_tick){
+				loadConfig("linux.xml");
+				life_tick = re_tick;
+				printf("\nConfig file reloaded since a modification has been detected.");
+			}
+		#else			
+			if ((re_tick = getLastModifiedTime("windows.xml")) != life_tick){
+				loadConfig("windows.xml");
+				life_tick = re_tick;
+				printf("\nConfig file reloaded since a modification has been detected.");
+			}
+		#endif
+		
 		send(my_socket->sock, "request", 8, 0);
 		int count = recv(my_socket->sock, (char*)&data, 256, 0);
 		if (firstScan){
