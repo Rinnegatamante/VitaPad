@@ -18,6 +18,7 @@
 
 // Input
 #if defined(__WIN32__) || defined(__CYGWIN__)
+#  define WIN32_LEAN_AND_MEAN
 #  include <windows.h>
 #else
 #  include <X11/Xlib.h>
@@ -25,33 +26,84 @@
 #endif
 
 // Keys
-#if defined(__WIN32__) || defined(__CYGWIN__)
-// If you want to change mapping, look here: http://www.philipstorr.id.au/pcbook/book3/scancode.htm
-#define KEY_DOWN 0x1F
-#define KEY_UP 0x11
-#define KEY_LEFT 0x1E
-#define KEY_RIGHT 0x20
+#include "tinyxml2.h"
 
-#define KEY_TRIANGLE 0x17
-#define KEY_SQUARE 0x24
-#define KEY_CROSS 0x25
-#define KEY_CIRCLE 0x26
+uint16_t KEY_DOWN, KEY_UP, KEY_LEFT, KEY_RIGHT, KEY_TRIANGLE, KEY_SQUARE, KEY_CROSS, KEY_CIRCLE;
+uint16_t KEY_L, KEY_R, KEY_START, KEY_SELECT, KEY_LANALOG_UP, KEY_LANALOG_DOWN, KEY_LANALOG_LEFT;
+uint16_t KEY_LANALOG_RIGHT, KEY_RANALOG_UP, KEY_RANALOG_DOWN, KEY_RANALOG_LEFT, KEY_RANALOG_RIGHT;
 
-#define KEY_L_TRIGGER 0x1D
-#define KEY_R_TRIGGER 0x39
-#define KEY_START 0x1C
-#define KEY_SELECT 0x2A
+void loadConfig(char* path)
+{
+	
+	// Loading XML file
+	tinyxml2::XMLDocument doc;
+	doc.LoadFile(path);
+	
+	// Getting elements
+	tinyxml2::XMLElement* k1 = doc.FirstChildElement("KEY_DOWN");
+	char* tmp = (char*)k1->GetText();
+	KEY_DOWN = strtoul(tmp, NULL, 16);
+	k1 = doc.FirstChildElement("KEY_UP");
+	tmp = (char*)k1->GetText();
+	KEY_UP = strtoul(tmp, NULL, 16);
+	k1 = doc.FirstChildElement("KEY_LEFT");
+	tmp = (char*)k1->GetText();
+	KEY_LEFT = strtoul(tmp, NULL, 16);
+	k1 = doc.FirstChildElement("KEY_RIGHT");
+	tmp = (char*)k1->GetText();
+	KEY_RIGHT = strtoul(tmp, NULL, 16);
+	k1 = doc.FirstChildElement("KEY_TRIANGLE");
+	tmp = (char*)k1->GetText();
+	KEY_TRIANGLE = strtoul(tmp, NULL, 16);
+	k1 = doc.FirstChildElement("KEY_SQUARE");
+	tmp = (char*)k1->GetText();
+	KEY_SQUARE = strtoul(tmp, NULL, 16);
+	k1 = doc.FirstChildElement("KEY_CROSS");
+	tmp = (char*)k1->GetText();
+	KEY_CROSS = strtoul(tmp, NULL, 16);
+	k1 = doc.FirstChildElement("KEY_CIRCLE");
+	tmp = (char*)k1->GetText();
+	KEY_CIRCLE = strtoul(tmp, NULL, 16);
+	k1 = doc.FirstChildElement("KEY_L");
+	tmp = (char*)k1->GetText();
+	KEY_L = strtoul(tmp, NULL, 16);
+	k1 = doc.FirstChildElement("KEY_R");
+	tmp = (char*)k1->GetText();
+	KEY_R = strtoul(tmp, NULL, 16);
+	k1 = doc.FirstChildElement("KEY_START");
+	tmp = (char*)k1->GetText();
+	KEY_START = strtoul(tmp, NULL, 16);
+	k1 = doc.FirstChildElement("KEY_SELECT");
+	tmp = (char*)k1->GetText();
+	KEY_SELECT = strtoul(tmp, NULL, 16);
+	k1 = doc.FirstChildElement("KEY_LANALOG_UP");
+	tmp = (char*)k1->GetText();
+	KEY_LANALOG_UP = strtoul(tmp, NULL, 16);
+	k1 = doc.FirstChildElement("KEY_LANALOG_DOWN");
+	tmp = (char*)k1->GetText();
+	KEY_LANALOG_DOWN = strtoul(tmp, NULL, 16);
+	k1 = doc.FirstChildElement("KEY_LANALOG_LEFT");
+	tmp = (char*)k1->GetText();
+	KEY_LANALOG_LEFT = strtoul(tmp, NULL, 16);
+	k1 = doc.FirstChildElement("KEY_LANALOG_RIGHT");
+	tmp = (char*)k1->GetText();
+	KEY_LANALOG_RIGHT = strtoul(tmp, NULL, 16);
+	k1 = doc.FirstChildElement("KEY_RANALOG_UP");
+	tmp = (char*)k1->GetText();
+	KEY_RANALOG_UP = strtoul(tmp, NULL, 16);
+	k1 = doc.FirstChildElement("KEY_RANALOG_DOWN");
+	tmp = (char*)k1->GetText();
+	KEY_RANALOG_DOWN = strtoul(tmp, NULL, 16);
+	k1 = doc.FirstChildElement("KEY_RANALOG_LEFT");
+	tmp = (char*)k1->GetText();
+	KEY_RANALOG_LEFT = strtoul(tmp, NULL, 16);
+	k1 = doc.FirstChildElement("KEY_RANALOG_RIGHT");
+	tmp = (char*)k1->GetText();
+	KEY_RANALOG_RIGHT = strtoul(tmp, NULL, 16);
+	
+}
 
-#define KEY_UP_1 0x48
-#define KEY_LEFT_1 0x4B
-#define KEY_RIGHT_1 0x4D
-#define KEY_DOWN_1 0x50
-
-#define KEY_UP_2 0x09
-#define KEY_LEFT_2 0x05
-#define KEY_RIGHT_2 0x07
-#define KEY_DOWN_2 0x03
-#elif __linux__
+#ifdef __linux__
 // If you want to change mapping, look at /usr/include/X11/keysymdef.h
 #define KEY_DOWN XK_S
 #define KEY_UP XK_W
@@ -63,20 +115,20 @@
 #define KEY_CROSS XK_K
 #define KEY_CIRCLE XK_L
 
-#define KEY_L_TRIGGER XK_Control_L
-#define KEY_R_TRIGGER XK_space
+#define KEY_L XK_Control_L
+#define KEY_R XK_space
 #define KEY_START XK_Return
 #define KEY_SELECT XK_Shift_L
 
-#define KEY_UP_1 XK_Up
-#define KEY_LEFT_1 XK_Left
-#define KEY_RIGHT_1 XK_Right
-#define KEY_DOWN_1 XK_Down
+#define KEY_LANALOG_UP XK_Up
+#define KEY_LANALOG_LEFT XK_Left
+#define KEY_LANALOG_RIGHT XK_Right
+#define KEY_LANALOG_DOWN XK_Down
 
-#define KEY_UP_2 XK_8
-#define KEY_LEFT_2 XK_4
-#define KEY_RIGHT_2 XK_6
-#define KEY_DOWN_2 XK_2
+#define KEY_RANALOG_UP XK_8
+#define KEY_RANALOG_LEFT XK_4
+#define KEY_RANALOG_RIGHT XK_6
+#define KEY_RANALOG_DOWN XK_2
 #endif
 
 #define u32 uint32_t
@@ -211,7 +263,14 @@ int main(int argc,char** argv){
     if (display == NULL)
         exit(1);
     #endif
-
+	
+	// Loading mapping
+	#ifdef __linux__
+		loadConfig("linux.xml");
+	#else
+		loadConfig("windows.xml");
+	#endif
+	
 	printf("VitaPad Client by Rinnegatamante\n\n");
 	char host[32];
 	if (argc > 1){
@@ -219,7 +278,7 @@ int main(int argc,char** argv){
 		sprintf(host,"%s",ip);
 	}else{
 		printf("Insert Vita IP: ");
-		scanf("%s",&host);
+		scanf("%s",host);
 	}
 
 	// Writing info on the screen
@@ -245,7 +304,7 @@ int main(int argc,char** argv){
 		return -1;
 	}else printf("\nConnection established!");
 	fflush(stdout);
-
+	
 	// Preparing input packets
 	uint8_t firstScan = 1;
 	PadPacket data;
@@ -253,7 +312,7 @@ int main(int argc,char** argv){
 
 	for (;;){
 		send(my_socket->sock, "request", 8, 0);
-		int count = recv(my_socket->sock, &data, 256, 0);
+		int count = recv(my_socket->sock, (char*)&data, 256, 0);
 		if (firstScan){
 			firstScan = 0;
 			memcpy(&olddata,&data,8);
@@ -293,12 +352,12 @@ int main(int argc,char** argv){
 			else if ((olddata.buttons & SCE_CTRL_CIRCLE) && (!(data.buttons & SCE_CTRL_CIRCLE))) SEND_BUTTON_RELEASE(KEY_CIRCLE);
 
 			// Control (L Trigger)
-			if ((data.buttons & SCE_CTRL_LTRIGGER) && (!(olddata.buttons & SCE_CTRL_LTRIGGER))) SEND_BUTTON_PRESS(KEY_L_TRIGGER);
-			else if ((olddata.buttons & SCE_CTRL_LTRIGGER) && (!(data.buttons & SCE_CTRL_LTRIGGER))) SEND_BUTTON_RELEASE(KEY_L_TRIGGER);
+			if ((data.buttons & SCE_CTRL_LTRIGGER) && (!(olddata.buttons & SCE_CTRL_LTRIGGER))) SEND_BUTTON_PRESS(KEY_L);
+			else if ((olddata.buttons & SCE_CTRL_LTRIGGER) && (!(data.buttons & SCE_CTRL_LTRIGGER))) SEND_BUTTON_RELEASE(KEY_L);
 
 			// Space (R Trigger)
-			if ((data.buttons & SCE_CTRL_RTRIGGER) && (!(olddata.buttons & SCE_CTRL_RTRIGGER))) SEND_BUTTON_PRESS(KEY_R_TRIGGER);
-			else if ((olddata.buttons & SCE_CTRL_RTRIGGER) && (!(data.buttons & SCE_CTRL_RTRIGGER))) SEND_BUTTON_RELEASE(KEY_R_TRIGGER);
+			if ((data.buttons & SCE_CTRL_RTRIGGER) && (!(olddata.buttons & SCE_CTRL_RTRIGGER))) SEND_BUTTON_PRESS(KEY_R);
+			else if ((olddata.buttons & SCE_CTRL_RTRIGGER) && (!(data.buttons & SCE_CTRL_RTRIGGER))) SEND_BUTTON_RELEASE(KEY_R);
 
 			// Enter (Start)
 			if ((data.buttons & SCE_CTRL_START) && (!(olddata.buttons & SCE_CTRL_START))) SEND_BUTTON_PRESS(KEY_START);
@@ -309,24 +368,24 @@ int main(int argc,char** argv){
 			else if ((olddata.buttons & SCE_CTRL_SELECT) && (!(data.buttons & SCE_CTRL_SELECT))) SEND_BUTTON_RELEASE(KEY_SELECT);
 
 			// Up/Down/Left/Right Arrows (Left Analog)
-			if ((data.ly < 50) && (!(olddata.ly < 50))) SEND_BUTTON_PRESS(KEY_UP_1);
-			else if ((olddata.ly < 50) && (!(data.ly < 50))) SEND_BUTTON_RELEASE(KEY_UP_1);
-			if ((data.lx < 50) && (!(olddata.lx < 50))) SEND_BUTTON_PRESS(KEY_LEFT_1);
-			else if ((olddata.lx < 50) && (!(data.lx < 50))) SEND_BUTTON_RELEASE(KEY_LEFT_1);
-			if ((data.lx > 170) && (!(olddata.lx > 170))) SEND_BUTTON_PRESS(KEY_RIGHT_1);
-			else if ((olddata.lx > 170) && (!(data.lx > 170))) SEND_BUTTON_RELEASE(KEY_RIGHT_1);
-			if ((data.ly > 170) && (!(olddata.ly > 170))) SEND_BUTTON_PRESS(KEY_DOWN_1);
-			else if ((olddata.ly > 170) && (!(data.ly > 170))) SEND_BUTTON_RELEASE(KEY_DOWN_1);
+			if ((data.ly < 50) && (!(olddata.ly < 50))) SEND_BUTTON_PRESS(KEY_LANALOG_UP);
+			else if ((olddata.ly < 50) && (!(data.ly < 50))) SEND_BUTTON_RELEASE(KEY_LANALOG_UP);
+			if ((data.lx < 50) && (!(olddata.lx < 50))) SEND_BUTTON_PRESS(KEY_LANALOG_LEFT);
+			else if ((olddata.lx < 50) && (!(data.lx < 50))) SEND_BUTTON_RELEASE(KEY_LANALOG_LEFT);
+			if ((data.lx > 170) && (!(olddata.lx > 170))) SEND_BUTTON_PRESS(KEY_LANALOG_RIGHT);
+			else if ((olddata.lx > 170) && (!(data.lx > 170))) SEND_BUTTON_RELEASE(KEY_LANALOG_RIGHT);
+			if ((data.ly > 170) && (!(olddata.ly > 170))) SEND_BUTTON_PRESS(KEY_LANALOG_DOWN);
+			else if ((olddata.ly > 170) && (!(data.ly > 170))) SEND_BUTTON_RELEASE(KEY_LANALOG_DOWN);
 
 			// 8/2/4/6 Arrows (Right Analog)
-			if ((data.ry < 50) && (!(olddata.ry < 50))) SEND_BUTTON_PRESS(KEY_UP_2);
-			else if ((olddata.ry < 50) && (!(data.ry < 50))) SEND_BUTTON_RELEASE(KEY_UP_2);
-			if ((data.rx < 50) && (!(olddata.rx < 50))) SEND_BUTTON_PRESS(KEY_LEFT_2);
-			else if ((olddata.rx < 50) && (!(data.rx < 50))) SEND_BUTTON_RELEASE(KEY_LEFT_2);
-			if ((data.rx > 170) && (!(olddata.rx > 170))) SEND_BUTTON_PRESS(KEY_RIGHT_2);
-			else if ((olddata.rx > 170) && (!(data.rx > 170))) SEND_BUTTON_RELEASE(KEY_RIGHT_2);
-			if ((data.ry > 170) && (!(olddata.ry > 170))) SEND_BUTTON_PRESS(KEY_DOWN_2);
-			else if ((olddata.ry > 170) && (!(data.ry > 170))) SEND_BUTTON_RELEASE(KEY_DOWN_2);
+			if ((data.ry < 50) && (!(olddata.ry < 50))) SEND_BUTTON_PRESS(KEY_RANALOG_UP);
+			else if ((olddata.ry < 50) && (!(data.ry < 50))) SEND_BUTTON_RELEASE(KEY_RANALOG_UP);
+			if ((data.rx < 50) && (!(olddata.rx < 50))) SEND_BUTTON_PRESS(KEY_RANALOG_LEFT);
+			else if ((olddata.rx < 50) && (!(data.rx < 50))) SEND_BUTTON_RELEASE(KEY_RANALOG_LEFT);
+			if ((data.rx > 170) && (!(olddata.rx > 170))) SEND_BUTTON_PRESS(KEY_RANALOG_RIGHT);
+			else if ((olddata.rx > 170) && (!(data.rx > 170))) SEND_BUTTON_RELEASE(KEY_RANALOG_RIGHT);
+			if ((data.ry > 170) && (!(olddata.ry > 170))) SEND_BUTTON_PRESS(KEY_RANALOG_DOWN);
+			else if ((olddata.ry > 170) && (!(data.ry > 170))) SEND_BUTTON_RELEASE(KEY_RANALOG_DOWN);
 
 			// Saving old pad status
 			memcpy(&olddata,&data,8);
