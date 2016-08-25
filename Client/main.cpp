@@ -359,7 +359,7 @@ int main(int argc,char** argv){
 		int count = recv(my_socket->sock, (char*)&data, 256, 0);
 		if (firstScan){
 			firstScan = 0;
-			memcpy(&olddata,&data,16);
+			memcpy(&olddata,&data,sizeof(PadPacket));
 		}
 
 		if (count != 0){
