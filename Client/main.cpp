@@ -9,7 +9,11 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-// PSVITA Related stuffs
+#if !(defined(__WIN32__) || defined(__CYGWIN__) || defined(__linux__))
+#  error "Your target system is not yet supported by VitaPad"
+#endif
+
+// PSVITA related stuffs
 #define SCREEN_WIDTH 1920
 #define SCREEN_HEIGHT 1088
 
@@ -282,6 +286,7 @@ time_t getLastModifiedTime(char *path) {
 
 
 int main(int argc,char** argv){
+	
 	#ifdef __WIN32__
 	WORD versionWanted = MAKEWORD(1, 1);
 	WSADATA wsaData;
