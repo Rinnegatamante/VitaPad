@@ -27,6 +27,10 @@
 #if defined(__WIN32__) || defined(__CYGWIN__)
 #  define WIN32_LEAN_AND_MEAN
 #  include <windows.h>
+#  ifndef INPUT // Patch for old(?) MinGW installations
+#    include <winable.h>
+#    define KEYEVENTF_SCANCODE 0x0008
+#  endif
 #else
 #  include <X11/Xlib.h>
 #  include <X11/Xutil.h>
@@ -150,6 +154,7 @@ typedef struct{
 	uint8_t click;
 } PadPacket;
 
+#if defined(__WIN32__) || defined(__CYGWIN__)
 void SendMoveMouse(int x, int y){
 	INPUT ip = { 0 };
 	ip.type = INPUT_MOUSE;
@@ -173,6 +178,7 @@ void SendMouseEvent(uint16_t event){
 	ip.mi.dwFlags = event;
 	SendInput(1, &ip, sizeof(INPUT));
 }
+#endif
 
 #if defined(__WIN32__) || defined(__CYGWIN__)
 void SendButtonPress(int btn){
@@ -263,7 +269,7 @@ void SendButtonRelease(Display* display, int btn){
 #endif
 
 time_t getLastModifiedTime(char *path) {
-	#ifdef __MINGW32__
+	#if defined(__MINGW32__) && defined(__stat64)
 	struct __stat64 attr;
 	__stat64(path, &attr);
 	return attr.st_mtime;
@@ -344,16 +350,13 @@ int main(int argc,char** argv){
 		#ifdef __linux__
 		if ((re_tick = getLastModifiedTime("linux.xml")) != life_tick){
 			loadConfig("linux.xml");
-			life_tick = re_tick;
-			printf("\nConfig file reloaded since a modification has been detected.");
-		}
-		#else			
+		#else
 		if ((re_tick = getLastModifiedTime("windows.xml")) != life_tick){
 			loadConfig("windows.xml");
+		#endif
 			life_tick = re_tick;
 			printf("\nConfig file reloaded since a modification has been detected.");
-		}
-		#endif
+		}		
 		
 		send(my_socket->sock, "request", 8, 0);
 		int count = recv(my_socket->sock, (char*)&data, 256, 0);
@@ -363,55 +366,55 @@ int main(int argc,char** argv){
 		}
 
 		if (count != 0){
-			// S (Down)
+			// Down
 			if ((data.buttons & SCE_CTRL_DOWN) && (!(olddata.buttons & SCE_CTRL_DOWN))) SEND_BUTTON_PRESS(KEY_DOWN);
 			else if ((olddata.buttons & SCE_CTRL_DOWN) && (!(data.buttons & SCE_CTRL_DOWN))) SEND_BUTTON_RELEASE(KEY_DOWN);
 
-			// W (Up)
+			// Up
 			if ((data.buttons & SCE_CTRL_UP) && (!(olddata.buttons & SCE_CTRL_UP))) SEND_BUTTON_PRESS(KEY_UP);
 			else if ((olddata.buttons & SCE_CTRL_UP) && (!(data.buttons & SCE_CTRL_UP))) SEND_BUTTON_RELEASE(KEY_UP);
 
-			// A (Left)
+			// Left
 			if ((data.buttons & SCE_CTRL_LEFT) && (!(olddata.buttons & SCE_CTRL_LEFT))) SEND_BUTTON_PRESS(KEY_LEFT);
 			else if ((olddata.buttons & SCE_CTRL_LEFT) && (!(data.buttons & SCE_CTRL_LEFT))) SEND_BUTTON_RELEASE(KEY_LEFT);
 
-			// D (Right)
+			// Right
 			if ((data.buttons & SCE_CTRL_RIGHT) && (!(olddata.buttons & SCE_CTRL_RIGHT))) SEND_BUTTON_PRESS(KEY_RIGHT);
 			else if ((olddata.buttons & SCE_CTRL_RIGHT) && (!(data.buttons & SCE_CTRL_RIGHT))) SEND_BUTTON_RELEASE(KEY_RIGHT);
 
-			// I (Triangle)
+			// Triangle
 			if ((data.buttons & SCE_CTRL_TRIANGLE) && (!(olddata.buttons & SCE_CTRL_TRIANGLE))) SEND_BUTTON_PRESS(KEY_TRIANGLE);
 			else if ((olddata.buttons & SCE_CTRL_TRIANGLE) && (!(data.buttons & SCE_CTRL_TRIANGLE))) SEND_BUTTON_RELEASE(KEY_TRIANGLE);
 
-			// J (Square)
+			// Square
 			if ((data.buttons & SCE_CTRL_SQUARE) && (!(olddata.buttons & SCE_CTRL_SQUARE))) SEND_BUTTON_PRESS(KEY_SQUARE);
 			else if ((olddata.buttons & SCE_CTRL_SQUARE) && (!(data.buttons & SCE_CTRL_SQUARE))) SEND_BUTTON_RELEASE(KEY_SQUARE);
 
-			// K (Cross)
+			// Cross
 			if ((data.buttons & SCE_CTRL_CROSS) && (!(olddata.buttons & SCE_CTRL_CROSS))) SEND_BUTTON_PRESS(KEY_CROSS);
 			else if ((olddata.buttons & SCE_CTRL_CROSS) && (!(data.buttons & SCE_CTRL_CROSS))) SEND_BUTTON_RELEASE(KEY_CROSS);
 
-			// L (Circle)
+			// Circle
 			if ((data.buttons & SCE_CTRL_CIRCLE) && (!(olddata.buttons & SCE_CTRL_CIRCLE))) SEND_BUTTON_PRESS(KEY_CIRCLE);
 			else if ((olddata.buttons & SCE_CTRL_CIRCLE) && (!(data.buttons & SCE_CTRL_CIRCLE))) SEND_BUTTON_RELEASE(KEY_CIRCLE);
 
-			// Control (L Trigger)
+			// L Trigger
 			if ((data.buttons & SCE_CTRL_LTRIGGER) && (!(olddata.buttons & SCE_CTRL_LTRIGGER))) SEND_BUTTON_PRESS(KEY_L);
 			else if ((olddata.buttons & SCE_CTRL_LTRIGGER) && (!(data.buttons & SCE_CTRL_LTRIGGER))) SEND_BUTTON_RELEASE(KEY_L);
 
-			// Space (R Trigger)
+			// R Trigger
 			if ((data.buttons & SCE_CTRL_RTRIGGER) && (!(olddata.buttons & SCE_CTRL_RTRIGGER))) SEND_BUTTON_PRESS(KEY_R);
 			else if ((olddata.buttons & SCE_CTRL_RTRIGGER) && (!(data.buttons & SCE_CTRL_RTRIGGER))) SEND_BUTTON_RELEASE(KEY_R);
 
-			// Enter (Start)
+			// Start
 			if ((data.buttons & SCE_CTRL_START) && (!(olddata.buttons & SCE_CTRL_START))) SEND_BUTTON_PRESS(KEY_START);
 			else if ((olddata.buttons & SCE_CTRL_START) && (!(data.buttons & SCE_CTRL_START))) SEND_BUTTON_RELEASE(KEY_START);
 
-			// Shift (Select)
+			// Select
 			if ((data.buttons & SCE_CTRL_SELECT) && (!(olddata.buttons & SCE_CTRL_SELECT))) SEND_BUTTON_PRESS(KEY_SELECT);
 			else if ((olddata.buttons & SCE_CTRL_SELECT) && (!(data.buttons & SCE_CTRL_SELECT))) SEND_BUTTON_RELEASE(KEY_SELECT);
 
-			// Up/Down/Left/Right Arrows (Left Analog)
+			// Left Analog
 			if ((data.ly < 50) && (!(olddata.ly < 50))) SEND_BUTTON_PRESS(KEY_LANALOG_UP);
 			else if ((olddata.ly < 50) && (!(data.ly < 50))) SEND_BUTTON_RELEASE(KEY_LANALOG_UP);
 			if ((data.lx < 50) && (!(olddata.lx < 50))) SEND_BUTTON_PRESS(KEY_LANALOG_LEFT);
@@ -421,7 +424,7 @@ int main(int argc,char** argv){
 			if ((data.ly > 170) && (!(olddata.ly > 170))) SEND_BUTTON_PRESS(KEY_LANALOG_DOWN);
 			else if ((olddata.ly > 170) && (!(data.ly > 170))) SEND_BUTTON_RELEASE(KEY_LANALOG_DOWN);
 
-			// 8/2/4/6 Arrows (Right Analog)
+			// Right Analog
 			if ((data.ry < 50) && (!(olddata.ry < 50))) SEND_BUTTON_PRESS(KEY_RANALOG_UP);
 			else if ((olddata.ry < 50) && (!(data.ry < 50))) SEND_BUTTON_RELEASE(KEY_RANALOG_UP);
 			if ((data.rx < 50) && (!(olddata.rx < 50))) SEND_BUTTON_PRESS(KEY_RANALOG_LEFT);
@@ -431,6 +434,7 @@ int main(int argc,char** argv){
 			if ((data.ry > 170) && (!(olddata.ry > 170))) SEND_BUTTON_PRESS(KEY_RANALOG_DOWN);
 			else if ((olddata.ry > 170) && (!(data.ry > 170))) SEND_BUTTON_RELEASE(KEY_RANALOG_DOWN);
 			
+			#if defined(__WIN32__) || defined(__CYGWIN__)
 			// Mouse emulation with touchscreen + retrotouch
 			if (data.click != NO_INPUT){			
 				if (data.click & MOUSE_MOV) SendMoveMouse(data.tx, data.ty);
@@ -439,6 +443,7 @@ int main(int argc,char** argv){
 				if ((data.click & RIGHT_CLICK) && (!(olddata.click & RIGHT_CLICK))) SendMouseEvent(MOUSEEVENTF_RIGHTDOWN);
 				else if ((olddata.click & RIGHT_CLICK) && (!(data.click & RIGHT_CLICK))) SendMouseEvent(MOUSEEVENTF_RIGHTUP);
 			}
+			#endif
 			
 			// Saving old pad status
 			memcpy(&olddata,&data,sizeof(PadPacket));
