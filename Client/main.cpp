@@ -203,7 +203,7 @@ void SendMoveMouse (Display* display, int x, int y) {
 }
 
 #if defined(__WIN32__) || defined(__CYGWIN__)
-#define SEND_MOVE_MOUSE(x) SendMoveMouse(x)
+#define SEND_MOVE_MOUSE(x,y) SendMoveMouse(x,y)
 #elif __linux__
 #define SEND_MOVE_MOUSE(...) SendMoveMouse(display, __VA_ARGS__)
 #endif
