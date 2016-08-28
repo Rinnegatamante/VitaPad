@@ -40,14 +40,27 @@
 #  include <X11/Xutil.h>
 #endif
 
-// Keys
 #include "tinyxml2.h"
 
+// Keys
 uint16_t KEY_DOWN, KEY_UP, KEY_LEFT, KEY_RIGHT, KEY_TRIANGLE, KEY_SQUARE, KEY_CROSS, KEY_CIRCLE;
 uint16_t KEY_L, KEY_R, KEY_START, KEY_SELECT, KEY_LANALOG_UP, KEY_LANALOG_DOWN, KEY_LANALOG_LEFT;
 uint16_t KEY_LANALOG_RIGHT, KEY_RANALOG_UP, KEY_RANALOG_DOWN, KEY_RANALOG_LEFT, KEY_RANALOG_RIGHT;
 
-void loadConfig(char* path)
+// Mouse
+#if defined(__WIN32__) || defined(__CYGWIN__)
+#define MOUSE_LEFT_DOWN MOUSEEVENTF_LEFTDOWN
+#define MOUSE_LEFT_UP MOUSEEVENTF_LEFTUP
+#define MOUSE_RIGHT_DOWN MOUSEEVENTF_LEFTDOWN
+#define MOUSE_RIGHT_UP MOUSEEVENTF_RIGHTUP
+#elif __linux__
+#define MOUSE_LEFT_DOWN 0
+#define MOUSE_LEFT_UP 1
+#define MOUSE_RIGHT_DOWN 2
+#define MOUSE_RIGHT_UP 3
+#endif
+
+void loadConfig(const char* path)
 {
 	
 	// Loading XML file
@@ -170,8 +183,32 @@ void SendMoveMouse(int x, int y){
 	ip.mi.time = 0;
 	ip.mi.dwFlags = MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_MOVE;
 	SendInput(1, &ip, sizeof(INPUT));
+#elif __linux__
+void SendMoveMouse (Display* display, int x, int y) {
+    // Get current mouse position
+    int mouse_x, mouse_y;
+    int root_x, root_y, win_x, win_y;
+    unsigned int mask_return;
+    Window widow_returned;
+    XQueryPointer(display, DefaultRootWindow (display),
+                  &widow_returned, &widow_returned, &root_x, &root_y,
+                  &win_x, &win_y, &mask_return);
+    mouse_x = root_x;
+    mouse_y = root_y;
+
+    // Set mouse position
+    XWarpPointer(display, None, None, 0, 0, 0, 0, x - mouse_x, y - mouse_y);
+    XFlush(display);
+#endif
 }
 
+#if defined(__WIN32__) || defined(__CYGWIN__)
+#define SEND_MOVE_MOUSE(x) SendMoveMouse(x)
+#elif __linux__
+#define SEND_MOVE_MOUSE(...) SendMoveMouse(display, __VA_ARGS__)
+#endif
+
+#if defined(__WIN32__) || defined(__CYGWIN__)
 void SendMouseEvent(uint16_t event){
 	INPUT ip = { 0 };
 	ip.type = INPUT_MOUSE;
@@ -181,7 +218,55 @@ void SendMouseEvent(uint16_t event){
 	ip.mi.time = 0;
 	ip.mi.dwFlags = event;
 	SendInput(1, &ip, sizeof(INPUT));
+#elif __linux__
+void SendMouseEvent (Display* display, uint16_t event) {
+    // Creating and setting up the event
+    XEvent ev;
+    memset(&ev, 0, sizeof (ev));
+
+    switch (event) {
+        case MOUSE_LEFT_DOWN:
+            ev.xbutton.button = Button1;
+            ev.type = ButtonPress;
+            break;
+
+        case MOUSE_LEFT_UP:
+            ev.xbutton.button = Button1;
+            ev.type = ButtonRelease;
+            break;
+
+        case MOUSE_RIGHT_DOWN:
+            ev.xbutton.button = Button3;
+            ev.type = ButtonPress;
+            break;
+
+        case MOUSE_RIGHT_UP:
+            ev.xbutton.button = Button3;
+            ev.type = ButtonRelease;
+            break;
+    }
+
+    ev.xbutton.same_screen = True;
+    ev.xbutton.subwindow = DefaultRootWindow(display);
+    while (ev.xbutton.subwindow) {
+        ev.xbutton.window = ev.xbutton.subwindow;
+        XQueryPointer(display, ev.xbutton.window,
+                      &ev.xbutton.root, &ev.xbutton.subwindow,
+                      &ev.xbutton.x_root, &ev.xbutton.y_root,
+                      &ev.xbutton.x, &ev.xbutton.y,
+                      &ev.xbutton.state);
+    }
+
+    // Send the event
+    XSendEvent(display, PointerWindow, True, ButtonPressMask, &ev);
+    XFlush(display);
+#endif
 }
+
+#if defined(__WIN32__) || defined(__CYGWIN__)
+#define SEND_MOUSE_EVENT(x) SendMouseEvent(x)
+#elif __linux__
+#define SEND_MOUSE_EVENT(...) SendMouseEvent(display, __VA_ARGS__)
 #endif
 
 #if defined(__WIN32__) || defined(__CYGWIN__)
@@ -272,7 +357,7 @@ void SendButtonRelease(Display* display, int btn){
 #define SEND_BUTTON_RELEASE(...) SendButtonRelease(display, __VA_ARGS__)
 #endif
 
-time_t getLastModifiedTime(char *path) {
+time_t getLastModifiedTime(const char *path) {
 	#if defined(__MINGW32__) && defined(__stat64)
 	struct __stat64 attr;
 	__stat64(path, &attr);
@@ -439,16 +524,14 @@ int main(int argc,char** argv){
 			if ((data.ry > 170) && (!(olddata.ry > 170))) SEND_BUTTON_PRESS(KEY_RANALOG_DOWN);
 			else if ((olddata.ry > 170) && (!(data.ry > 170))) SEND_BUTTON_RELEASE(KEY_RANALOG_DOWN);
 			
-			#if defined(__WIN32__) || defined(__CYGWIN__)
 			// Mouse emulation with touchscreen + retrotouch
-			if (data.click != NO_INPUT){			
-				if (data.click & MOUSE_MOV) SendMoveMouse(data.tx, data.ty);
-				if ((data.click & LEFT_CLICK) && (!(olddata.click & LEFT_CLICK))) SendMouseEvent(MOUSEEVENTF_LEFTDOWN);
-				else if ((olddata.click & LEFT_CLICK) && (!(data.click & LEFT_CLICK))) SendMouseEvent(MOUSEEVENTF_LEFTUP);
-				if ((data.click & RIGHT_CLICK) && (!(olddata.click & RIGHT_CLICK))) SendMouseEvent(MOUSEEVENTF_RIGHTDOWN);
-				else if ((olddata.click & RIGHT_CLICK) && (!(data.click & RIGHT_CLICK))) SendMouseEvent(MOUSEEVENTF_RIGHTUP);
+			if (data.click != NO_INPUT){
+				if (data.click & MOUSE_MOV) SEND_MOVE_MOUSE(data.tx, data.ty);
+				if ((data.click & LEFT_CLICK) && (!(olddata.click & LEFT_CLICK))) SEND_MOUSE_EVENT(MOUSE_LEFT_DOWN);
+				else if ((olddata.click & LEFT_CLICK) && (!(data.click & LEFT_CLICK))) SEND_MOUSE_EVENT(MOUSE_LEFT_UP);
+				if ((data.click & RIGHT_CLICK) && (!(olddata.click & RIGHT_CLICK))) SEND_MOUSE_EVENT(MOUSE_RIGHT_DOWN);
+				else if ((olddata.click & RIGHT_CLICK) && (!(data.click & RIGHT_CLICK))) SEND_MOUSE_EVENT(MOUSE_RIGHT_UP);
 			}
-			#endif
 			
 			// Saving old pad status
 			memcpy(&olddata,&data,sizeof(PadPacket));
