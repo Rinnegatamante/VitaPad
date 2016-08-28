@@ -51,7 +51,7 @@ uint16_t KEY_LANALOG_RIGHT, KEY_RANALOG_UP, KEY_RANALOG_DOWN, KEY_RANALOG_LEFT, 
 #if defined(__WIN32__) || defined(__CYGWIN__)
 #define MOUSE_LEFT_DOWN MOUSEEVENTF_LEFTDOWN
 #define MOUSE_LEFT_UP MOUSEEVENTF_LEFTUP
-#define MOUSE_RIGHT_DOWN MOUSEEVENTF_LEFTDOWN
+#define MOUSE_RIGHT_DOWN MOUSEEVENTF_RIGHTDOWN
 #define MOUSE_RIGHT_UP MOUSEEVENTF_RIGHTUP
 #elif __linux__
 #define MOUSE_LEFT_DOWN 0
@@ -387,11 +387,11 @@ int main(int argc,char** argv){
 	// Loading mapping
 	time_t life_tick = 0;
 	#ifdef __linux__
-		loadConfig("linux.xml");
-		life_tick = getLastModifiedTime("linux.xml");
+	loadConfig("linux.xml");
+	life_tick = getLastModifiedTime("linux.xml");
 	#else
-		loadConfig("windows.xml");
-		life_tick = getLastModifiedTime("windows.xml");
+	loadConfig("windows.xml");
+	life_tick = getLastModifiedTime("windows.xml");
 	#endif
 	
 	printf("VitaPad Client by Rinnegatamante\n\n");
