@@ -12,4 +12,4 @@ windows:
 	g++ -static-libgcc -static-libstdc++ -o VitaPad main.cpp tinyxml2.cpp icon.res -static -lpthread -lws2_32 -fpermissive
 
 linux:
-	g++ -static-libgcc -static-libstdc++ -o VitaPad main.cpp tinyxml2.cpp -lX11 -fpermissive
+	g++ -static-libgcc -static-libstdc++ -o VitaPad main.cpp tinyxml2.cpp -lX11 -lXtst -fpermissive
