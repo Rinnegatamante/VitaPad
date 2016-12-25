@@ -60,6 +60,84 @@ uint16_t KEY_LANALOG_RIGHT, KEY_RANALOG_UP, KEY_RANALOG_DOWN, KEY_RANALOG_LEFT, 
 #define MOUSE_RIGHT_UP 3
 #endif
 
+
+// VJoy
+#ifdef __WIN32__
+# include "VJoySDK/inc/public.h"
+# include "VJoySDK/inc/vjoyinterface.h"
+bool VJOY_MODE = false;
+bool VJOY_ALTERNATE = false;
+int VJOY_DEVID = 0;
+
+enum {
+	VJOY_CTRL_SELECT     = 1 << 6,	//!< Select button.
+	VJOY_CTRL_START      = 1 << 7,	//!< Start button.
+	VJOY_CTRL_LBUMPER   = 1 << 4,	//!< Left bumper.
+	VJOY_CTRL_RBUMPER   = 1 << 5,	//!< Right bumper.
+	VJOY_CTRL_TRIANGLE   = 1 << 3,	//!< Triangle button.
+	VJOY_CTRL_CIRCLE     = 1 << 1,	//!< Circle button.
+	VJOY_CTRL_CROSS      = 1 << 0,	//!< Cross button.
+	VJOY_CTRL_SQUARE     = 1 << 2	//!< Square button.
+};
+#endif
+
+// VJoy implementation
+#ifdef __WIN32__
+void abortVjoy()
+{
+	VJOY_MODE = false;
+	VJOY_DEVID = 0;
+	printf("\nERROR: An error occurred while initializing VJOY. Reverting back to keybinds.\n");
+}
+void initVjoy()
+{
+	if (!vJoyEnabled())
+	{
+		abortVjoy();
+		return;
+	}
+	for (UINT devId = 1; devId <= 16; devId++)
+	{
+		if (VJD_STAT_FREE == GetVJDStatus(devId))
+		{
+			if (8 > GetVJDButtonNumber(devId))
+			{
+				printf("VJOY: ID:%u Buttons number insuffisent.\n", devId);
+				continue;
+			}
+			if (!GetVJDAxisExist(devId, HID_USAGE_X) || 
+				!GetVJDAxisExist(devId, HID_USAGE_Y) || 
+				!GetVJDAxisExist(devId, HID_USAGE_Z) || 
+				!GetVJDAxisExist(devId, HID_USAGE_RX) || 
+				!GetVJDAxisExist(devId, HID_USAGE_RY) || 
+				!GetVJDAxisExist(devId, HID_USAGE_RZ) || 
+				!GetVJDAxisExist(devId, HID_USAGE_SL0) || 
+				!GetVJDAxisExist(devId, HID_USAGE_SL1) || 
+				!GetVJDAxisExist(devId, HID_USAGE_WHL) || 
+				!GetVJDAxisExist(devId, HID_USAGE_POV))
+			{
+				printf("VJOY: ID:%u Some axis not defined.\n", devId);
+				continue;
+			}
+			VJOY_DEVID = devId;
+			break;
+		}
+		else
+		{
+			printf("VJOY: ID:%u Not ready, status:%u.\n", devId, GetVJDStatus(devId));
+		}
+	}
+	
+	if (0 == VJOY_DEVID || !AcquireVJD(VJOY_DEVID))
+	{
+		abortVjoy();
+		return;
+	}
+	
+	printf("Acquired ID:%u VJOY device.\n", VJOY_DEVID);
+}
+#endif
+
 void loadConfig(const char* path)
 {
 	
@@ -69,7 +147,7 @@ void loadConfig(const char* path)
 		printf("\nERROR: An error occurred while opening config file.");
 		return;
 	}
-	
+
 	// Getting elements
 	tinyxml2::XMLElement* k1 = doc.FirstChildElement("KEY_DOWN");
 	char* tmp = (char*)k1->GetText();
@@ -131,6 +209,22 @@ void loadConfig(const char* path)
 	k1 = doc.FirstChildElement("KEY_RANALOG_RIGHT");
 	tmp = (char*)k1->GetText();
 	KEY_RANALOG_RIGHT = strtoul(tmp, NULL, 16);
+	
+#ifdef __WIN32__
+	k1 = doc.FirstChildElement("VJOY_MODE");
+	bool tmp_bool = 0;
+	if (0 != k1 && 0 == k1->QueryBoolText(&tmp_bool) && true == tmp_bool)
+	{
+		VJOY_MODE = true;
+	}
+	
+	k1 = doc.FirstChildElement("VJOY_ALTERNATE");
+	tmp_bool = 0;
+	if (0 != k1 && 0 == k1->QueryBoolText(&tmp_bool) && true == tmp_bool)
+	{
+		VJOY_ALTERNATE = true;
+	}
+#endif
 	
 }
 
@@ -395,6 +489,13 @@ int main(int argc,char** argv){
 	#endif
 	
 	printf("VitaPad Client by Rinnegatamante\n\n");
+	#ifdef __WIN32__
+	if (VJOY_MODE)
+	{
+		printf("!!!STARTING IN VJOY MODE!!!\nEdit the config and restart the application to disable it\n");
+		initVjoy();
+	}
+	#endif
 	char host[32];
 	if (argc > 1){
 		char* ip = (char*)(argv[1]);
@@ -432,6 +533,10 @@ int main(int argc,char** argv){
 	uint8_t firstScan = 1;
 	PadPacket data;
 	PadPacket olddata;
+	#ifdef __WIN32__
+	JOYSTICK_POSITION_V2 joystickData;
+	JOYSTICK_POSITION_V2 joystickDataOld;
+	#endif
 
 	for (;;){
 	
@@ -453,85 +558,199 @@ int main(int argc,char** argv){
 		if (firstScan){
 			firstScan = 0;
 			memcpy(&olddata,&data,sizeof(PadPacket));
+			#ifdef __WIN32__
+			memcpy(&joystickDataOld,&joystickData,sizeof(JOYSTICK_POSITION_V2));
+			#endif
 		}
 
 		if (count != 0){
-			// Down
-			if ((data.buttons & SCE_CTRL_DOWN) && (!(olddata.buttons & SCE_CTRL_DOWN))) SEND_BUTTON_PRESS(KEY_DOWN);
-			else if ((olddata.buttons & SCE_CTRL_DOWN) && (!(data.buttons & SCE_CTRL_DOWN))) SEND_BUTTON_RELEASE(KEY_DOWN);
-
-			// Up
-			if ((data.buttons & SCE_CTRL_UP) && (!(olddata.buttons & SCE_CTRL_UP))) SEND_BUTTON_PRESS(KEY_UP);
-			else if ((olddata.buttons & SCE_CTRL_UP) && (!(data.buttons & SCE_CTRL_UP))) SEND_BUTTON_RELEASE(KEY_UP);
-
-			// Left
-			if ((data.buttons & SCE_CTRL_LEFT) && (!(olddata.buttons & SCE_CTRL_LEFT))) SEND_BUTTON_PRESS(KEY_LEFT);
-			else if ((olddata.buttons & SCE_CTRL_LEFT) && (!(data.buttons & SCE_CTRL_LEFT))) SEND_BUTTON_RELEASE(KEY_LEFT);
-
-			// Right
-			if ((data.buttons & SCE_CTRL_RIGHT) && (!(olddata.buttons & SCE_CTRL_RIGHT))) SEND_BUTTON_PRESS(KEY_RIGHT);
-			else if ((olddata.buttons & SCE_CTRL_RIGHT) && (!(data.buttons & SCE_CTRL_RIGHT))) SEND_BUTTON_RELEASE(KEY_RIGHT);
-
-			// Triangle
-			if ((data.buttons & SCE_CTRL_TRIANGLE) && (!(olddata.buttons & SCE_CTRL_TRIANGLE))) SEND_BUTTON_PRESS(KEY_TRIANGLE);
-			else if ((olddata.buttons & SCE_CTRL_TRIANGLE) && (!(data.buttons & SCE_CTRL_TRIANGLE))) SEND_BUTTON_RELEASE(KEY_TRIANGLE);
-
-			// Square
-			if ((data.buttons & SCE_CTRL_SQUARE) && (!(olddata.buttons & SCE_CTRL_SQUARE))) SEND_BUTTON_PRESS(KEY_SQUARE);
-			else if ((olddata.buttons & SCE_CTRL_SQUARE) && (!(data.buttons & SCE_CTRL_SQUARE))) SEND_BUTTON_RELEASE(KEY_SQUARE);
-
-			// Cross
-			if ((data.buttons & SCE_CTRL_CROSS) && (!(olddata.buttons & SCE_CTRL_CROSS))) SEND_BUTTON_PRESS(KEY_CROSS);
-			else if ((olddata.buttons & SCE_CTRL_CROSS) && (!(data.buttons & SCE_CTRL_CROSS))) SEND_BUTTON_RELEASE(KEY_CROSS);
-
-			// Circle
-			if ((data.buttons & SCE_CTRL_CIRCLE) && (!(olddata.buttons & SCE_CTRL_CIRCLE))) SEND_BUTTON_PRESS(KEY_CIRCLE);
-			else if ((olddata.buttons & SCE_CTRL_CIRCLE) && (!(data.buttons & SCE_CTRL_CIRCLE))) SEND_BUTTON_RELEASE(KEY_CIRCLE);
-
-			// L Trigger
-			if ((data.buttons & SCE_CTRL_LTRIGGER) && (!(olddata.buttons & SCE_CTRL_LTRIGGER))) SEND_BUTTON_PRESS(KEY_L);
-			else if ((olddata.buttons & SCE_CTRL_LTRIGGER) && (!(data.buttons & SCE_CTRL_LTRIGGER))) SEND_BUTTON_RELEASE(KEY_L);
-
-			// R Trigger
-			if ((data.buttons & SCE_CTRL_RTRIGGER) && (!(olddata.buttons & SCE_CTRL_RTRIGGER))) SEND_BUTTON_PRESS(KEY_R);
-			else if ((olddata.buttons & SCE_CTRL_RTRIGGER) && (!(data.buttons & SCE_CTRL_RTRIGGER))) SEND_BUTTON_RELEASE(KEY_R);
-
-			// Start
-			if ((data.buttons & SCE_CTRL_START) && (!(olddata.buttons & SCE_CTRL_START))) SEND_BUTTON_PRESS(KEY_START);
-			else if ((olddata.buttons & SCE_CTRL_START) && (!(data.buttons & SCE_CTRL_START))) SEND_BUTTON_RELEASE(KEY_START);
-
-			// Select
-			if ((data.buttons & SCE_CTRL_SELECT) && (!(olddata.buttons & SCE_CTRL_SELECT))) SEND_BUTTON_PRESS(KEY_SELECT);
-			else if ((olddata.buttons & SCE_CTRL_SELECT) && (!(data.buttons & SCE_CTRL_SELECT))) SEND_BUTTON_RELEASE(KEY_SELECT);
-
-			// Left Analog
-			if ((data.ly < 50) && (!(olddata.ly < 50))) SEND_BUTTON_PRESS(KEY_LANALOG_UP);
-			else if ((olddata.ly < 50) && (!(data.ly < 50))) SEND_BUTTON_RELEASE(KEY_LANALOG_UP);
-			if ((data.lx < 50) && (!(olddata.lx < 50))) SEND_BUTTON_PRESS(KEY_LANALOG_LEFT);
-			else if ((olddata.lx < 50) && (!(data.lx < 50))) SEND_BUTTON_RELEASE(KEY_LANALOG_LEFT);
-			if ((data.lx > 170) && (!(olddata.lx > 170))) SEND_BUTTON_PRESS(KEY_LANALOG_RIGHT);
-			else if ((olddata.lx > 170) && (!(data.lx > 170))) SEND_BUTTON_RELEASE(KEY_LANALOG_RIGHT);
-			if ((data.ly > 170) && (!(olddata.ly > 170))) SEND_BUTTON_PRESS(KEY_LANALOG_DOWN);
-			else if ((olddata.ly > 170) && (!(data.ly > 170))) SEND_BUTTON_RELEASE(KEY_LANALOG_DOWN);
-
-			// Right Analog
-			if ((data.ry < 50) && (!(olddata.ry < 50))) SEND_BUTTON_PRESS(KEY_RANALOG_UP);
-			else if ((olddata.ry < 50) && (!(data.ry < 50))) SEND_BUTTON_RELEASE(KEY_RANALOG_UP);
-			if ((data.rx < 50) && (!(olddata.rx < 50))) SEND_BUTTON_PRESS(KEY_RANALOG_LEFT);
-			else if ((olddata.rx < 50) && (!(data.rx < 50))) SEND_BUTTON_RELEASE(KEY_RANALOG_LEFT);
-			if ((data.rx > 170) && (!(olddata.rx > 170))) SEND_BUTTON_PRESS(KEY_RANALOG_RIGHT);
-			else if ((olddata.rx > 170) && (!(data.rx > 170))) SEND_BUTTON_RELEASE(KEY_RANALOG_RIGHT);
-			if ((data.ry > 170) && (!(olddata.ry > 170))) SEND_BUTTON_PRESS(KEY_RANALOG_DOWN);
-			else if ((olddata.ry > 170) && (!(data.ry > 170))) SEND_BUTTON_RELEASE(KEY_RANALOG_DOWN);
-			
-			// Mouse emulation with touchscreen + retrotouch
-			if (data.click != NO_INPUT){
-				if (data.click & MOUSE_MOV) SEND_MOVE_MOUSE(data.tx, data.ty);
-				if ((data.click & LEFT_CLICK) && (!(olddata.click & LEFT_CLICK))) SEND_MOUSE_EVENT(MOUSE_LEFT_DOWN);
-				else if ((olddata.click & LEFT_CLICK) && (!(data.click & LEFT_CLICK))) SEND_MOUSE_EVENT(MOUSE_LEFT_UP);
-				if ((data.click & RIGHT_CLICK) && (!(olddata.click & RIGHT_CLICK))) SEND_MOUSE_EVENT(MOUSE_RIGHT_DOWN);
-				else if ((olddata.click & RIGHT_CLICK) && (!(data.click & RIGHT_CLICK))) SEND_MOUSE_EVENT(MOUSE_RIGHT_UP);
+			#ifdef __WIN32__
+			if (VJOY_MODE)
+			{				
+				joystickData.bDevice = VJOY_DEVID;
+				joystickData.wAxisZ = 16384;
+				joystickData.wAxisZRot = 16384;
+				joystickData.wSlider = 16384;
+				
+				LONG buttons = 0;
+				if (data.buttons & SCE_CTRL_LEFT)
+				{
+					joystickData.wAxisZRot = 0;
+				}
+				else if (data.buttons & SCE_CTRL_RIGHT)
+				{
+					joystickData.wAxisZRot = 32768;
+				}
+				if (data.buttons & SCE_CTRL_UP)
+				{
+					joystickData.wSlider = 32768;
+				}
+				else if (data.buttons & SCE_CTRL_DOWN)
+				{
+					joystickData.wSlider = 0;
+				}
+				if (data.buttons & SCE_CTRL_TRIANGLE)
+				{
+					buttons = buttons | VJOY_CTRL_TRIANGLE;
+				}
+				if (data.buttons & SCE_CTRL_SQUARE)
+				{
+					buttons = buttons | VJOY_CTRL_SQUARE;
+				}
+				if (data.buttons & SCE_CTRL_CROSS)
+				{
+					buttons = buttons | VJOY_CTRL_CROSS;
+				}
+				if (data.buttons & SCE_CTRL_CIRCLE)
+				{
+					buttons = buttons | VJOY_CTRL_CIRCLE;
+				}
+				if (data.buttons & SCE_CTRL_RTRIGGER)
+				{
+					joystickData.wAxisZ = 0;
+					//SetAxis(32768, VJOY_DEVID, HID_USAGE_WHL);
+				}
+				else
+				{
+					//SetAxis(16384, VJOY_DEVID, HID_USAGE_WHL);
+				}
+				if (data.buttons & SCE_CTRL_LTRIGGER)
+				{
+					joystickData.wAxisZ = 32768;
+				}
+				if (data.buttons & SCE_CTRL_START)
+				{
+					buttons = buttons | VJOY_CTRL_START;
+				}
+				if (data.buttons & SCE_CTRL_SELECT)
+				{
+					buttons = buttons | VJOY_CTRL_SELECT;
+				}
+				if (VJOY_ALTERNATE)
+				{
+					if (data.rx < 70)
+					{
+						buttons = buttons | VJOY_CTRL_LBUMPER;
+					}
+					else if (data.rx > 180)
+					{
+						buttons = buttons | VJOY_CTRL_RBUMPER;
+					}
+					joystickData.wAxisXRot = 16384;
+					joystickData.wAxisYRot = 16384;
+				}
+				else
+				{
+					if (data.click & MOUSE_MOV && data.tx < SCREEN_WIDTH/2)
+					{
+						buttons = buttons | VJOY_CTRL_LBUMPER;
+					}
+					if (data.click & MOUSE_MOV && data.tx > SCREEN_WIDTH/2)
+					{
+						buttons = buttons | VJOY_CTRL_RBUMPER;
+					}
+					joystickData.wAxisXRot = data.rx*128;
+					joystickData.wAxisYRot = data.ry*128;
+				}
+				joystickData.lButtons = buttons;
+				joystickData.wAxisX = data.lx*128;
+				joystickData.wAxisY = data.ly*128;
+				
+				if (0 != memcmp(&joystickDataOld, &joystickData, sizeof(JOYSTICK_POSITION_V2)))
+				{
+					PVOID pJoystickData = (PVOID)(&joystickData);
+					if (!UpdateVJD(VJOY_DEVID, pJoystickData))
+					{
+						printf("\nERROR: Feeding VJOY failed, please restart the app\n");
+						abortVjoy();
+					}
+					
+					memcpy(&joystickDataOld,&joystickData,sizeof(JOYSTICK_POSITION_V2));
+				}
 			}
+			if (!VJOY_MODE)
+			{
+			#endif
+				// Down
+				if ((data.buttons & SCE_CTRL_DOWN) && (!(olddata.buttons & SCE_CTRL_DOWN))) SEND_BUTTON_PRESS(KEY_DOWN);
+				else if ((olddata.buttons & SCE_CTRL_DOWN) && (!(data.buttons & SCE_CTRL_DOWN))) SEND_BUTTON_RELEASE(KEY_DOWN);
+
+				// Up
+				if ((data.buttons & SCE_CTRL_UP) && (!(olddata.buttons & SCE_CTRL_UP))) SEND_BUTTON_PRESS(KEY_UP);
+				else if ((olddata.buttons & SCE_CTRL_UP) && (!(data.buttons & SCE_CTRL_UP))) SEND_BUTTON_RELEASE(KEY_UP);
+
+				// Left
+				if ((data.buttons & SCE_CTRL_LEFT) && (!(olddata.buttons & SCE_CTRL_LEFT))) SEND_BUTTON_PRESS(KEY_LEFT);
+				else if ((olddata.buttons & SCE_CTRL_LEFT) && (!(data.buttons & SCE_CTRL_LEFT))) SEND_BUTTON_RELEASE(KEY_LEFT);
+
+				// Right
+				if ((data.buttons & SCE_CTRL_RIGHT) && (!(olddata.buttons & SCE_CTRL_RIGHT))) SEND_BUTTON_PRESS(KEY_RIGHT);
+				else if ((olddata.buttons & SCE_CTRL_RIGHT) && (!(data.buttons & SCE_CTRL_RIGHT))) SEND_BUTTON_RELEASE(KEY_RIGHT);
+
+				// Triangle
+				if ((data.buttons & SCE_CTRL_TRIANGLE) && (!(olddata.buttons & SCE_CTRL_TRIANGLE))) SEND_BUTTON_PRESS(KEY_TRIANGLE);
+				else if ((olddata.buttons & SCE_CTRL_TRIANGLE) && (!(data.buttons & SCE_CTRL_TRIANGLE))) SEND_BUTTON_RELEASE(KEY_TRIANGLE);
+
+				// Square
+				if ((data.buttons & SCE_CTRL_SQUARE) && (!(olddata.buttons & SCE_CTRL_SQUARE))) SEND_BUTTON_PRESS(KEY_SQUARE);
+				else if ((olddata.buttons & SCE_CTRL_SQUARE) && (!(data.buttons & SCE_CTRL_SQUARE))) SEND_BUTTON_RELEASE(KEY_SQUARE);
+
+				// Cross
+				if ((data.buttons & SCE_CTRL_CROSS) && (!(olddata.buttons & SCE_CTRL_CROSS))) SEND_BUTTON_PRESS(KEY_CROSS);
+				else if ((olddata.buttons & SCE_CTRL_CROSS) && (!(data.buttons & SCE_CTRL_CROSS))) SEND_BUTTON_RELEASE(KEY_CROSS);
+
+				// Circle
+				if ((data.buttons & SCE_CTRL_CIRCLE) && (!(olddata.buttons & SCE_CTRL_CIRCLE))) SEND_BUTTON_PRESS(KEY_CIRCLE);
+				else if ((olddata.buttons & SCE_CTRL_CIRCLE) && (!(data.buttons & SCE_CTRL_CIRCLE))) SEND_BUTTON_RELEASE(KEY_CIRCLE);
+
+				// L Trigger
+				if ((data.buttons & SCE_CTRL_LTRIGGER) && (!(olddata.buttons & SCE_CTRL_LTRIGGER))) SEND_BUTTON_PRESS(KEY_L);
+				else if ((olddata.buttons & SCE_CTRL_LTRIGGER) && (!(data.buttons & SCE_CTRL_LTRIGGER))) SEND_BUTTON_RELEASE(KEY_L);
+
+				// R Trigger
+				if ((data.buttons & SCE_CTRL_RTRIGGER) && (!(olddata.buttons & SCE_CTRL_RTRIGGER))) SEND_BUTTON_PRESS(KEY_R);
+				else if ((olddata.buttons & SCE_CTRL_RTRIGGER) && (!(data.buttons & SCE_CTRL_RTRIGGER))) SEND_BUTTON_RELEASE(KEY_R);
+
+				// Start
+				if ((data.buttons & SCE_CTRL_START) && (!(olddata.buttons & SCE_CTRL_START))) SEND_BUTTON_PRESS(KEY_START);
+				else if ((olddata.buttons & SCE_CTRL_START) && (!(data.buttons & SCE_CTRL_START))) SEND_BUTTON_RELEASE(KEY_START);
+
+				// Select
+				if ((data.buttons & SCE_CTRL_SELECT) && (!(olddata.buttons & SCE_CTRL_SELECT))) SEND_BUTTON_PRESS(KEY_SELECT);
+				else if ((olddata.buttons & SCE_CTRL_SELECT) && (!(data.buttons & SCE_CTRL_SELECT))) SEND_BUTTON_RELEASE(KEY_SELECT);
+
+				// Left Analog
+				if ((data.ly < 50) && (!(olddata.ly < 50))) SEND_BUTTON_PRESS(KEY_LANALOG_UP);
+				else if ((olddata.ly < 50) && (!(data.ly < 50))) SEND_BUTTON_RELEASE(KEY_LANALOG_UP);
+				if ((data.lx < 50) && (!(olddata.lx < 50))) SEND_BUTTON_PRESS(KEY_LANALOG_LEFT);
+				else if ((olddata.lx < 50) && (!(data.lx < 50))) SEND_BUTTON_RELEASE(KEY_LANALOG_LEFT);
+				if ((data.lx > 170) && (!(olddata.lx > 170))) SEND_BUTTON_PRESS(KEY_LANALOG_RIGHT);
+				else if ((olddata.lx > 170) && (!(data.lx > 170))) SEND_BUTTON_RELEASE(KEY_LANALOG_RIGHT);
+				if ((data.ly > 170) && (!(olddata.ly > 170))) SEND_BUTTON_PRESS(KEY_LANALOG_DOWN);
+				else if ((olddata.ly > 170) && (!(data.ly > 170))) SEND_BUTTON_RELEASE(KEY_LANALOG_DOWN);
+
+				// Right Analog
+				if ((data.ry < 50) && (!(olddata.ry < 50))) SEND_BUTTON_PRESS(KEY_RANALOG_UP);
+				else if ((olddata.ry < 50) && (!(data.ry < 50))) SEND_BUTTON_RELEASE(KEY_RANALOG_UP);
+				if ((data.rx < 50) && (!(olddata.rx < 50))) SEND_BUTTON_PRESS(KEY_RANALOG_LEFT);
+				else if ((olddata.rx < 50) && (!(data.rx < 50))) SEND_BUTTON_RELEASE(KEY_RANALOG_LEFT);
+				if ((data.rx > 170) && (!(olddata.rx > 170))) SEND_BUTTON_PRESS(KEY_RANALOG_RIGHT);
+				else if ((olddata.rx > 170) && (!(data.rx > 170))) SEND_BUTTON_RELEASE(KEY_RANALOG_RIGHT);
+				if ((data.ry > 170) && (!(olddata.ry > 170))) SEND_BUTTON_PRESS(KEY_RANALOG_DOWN);
+				else if ((olddata.ry > 170) && (!(data.ry > 170))) SEND_BUTTON_RELEASE(KEY_RANALOG_DOWN);
+			
+				// Mouse emulation with touchscreen + retrotouch
+				if (data.click != NO_INPUT){
+					if (data.click & MOUSE_MOV) SEND_MOVE_MOUSE(data.tx, data.ty);
+					if ((data.click & LEFT_CLICK) && (!(olddata.click & LEFT_CLICK))) SEND_MOUSE_EVENT(MOUSE_LEFT_DOWN);
+					else if ((olddata.click & LEFT_CLICK) && (!(data.click & LEFT_CLICK))) SEND_MOUSE_EVENT(MOUSE_LEFT_UP);
+					if ((data.click & RIGHT_CLICK) && (!(olddata.click & RIGHT_CLICK))) SEND_MOUSE_EVENT(MOUSE_RIGHT_DOWN);
+					else if ((olddata.click & RIGHT_CLICK) && (!(data.click & RIGHT_CLICK))) SEND_MOUSE_EVENT(MOUSE_RIGHT_UP);
+				}
+				
+			#ifdef __WIN32__
+			}
+			#endif
 			
 			// Saving old pad status
 			memcpy(&olddata,&data,sizeof(PadPacket));
