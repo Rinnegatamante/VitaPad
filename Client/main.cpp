@@ -27,6 +27,8 @@
 # include <arpa/inet.h>
 #endif
 
+#include "tinyxml2.h"
+
 // Input
 #if defined(__WIN32__) || defined(__CYGWIN__)
 #  define WIN32_LEAN_AND_MEAN
@@ -38,9 +40,8 @@
 #else
 #  include <X11/Xlib.h>
 #  include <X11/Xutil.h>
+#  include <X11/extensions/XTest.h>
 #endif
-
-#include "tinyxml2.h"
 
 // Keys
 uint16_t KEY_DOWN, KEY_UP, KEY_LEFT, KEY_RIGHT, KEY_TRIANGLE, KEY_SQUARE, KEY_CROSS, KEY_CIRCLE;
@@ -220,45 +221,32 @@ void SendMouseEvent(uint16_t event){
 	SendInput(1, &ip, sizeof(INPUT));
 #elif __linux__
 void SendMouseEvent (Display* display, uint16_t event) {
-    // Creating and setting up the event
-    XEvent ev;
-    memset(&ev, 0, sizeof (ev));
+    Bool down;
+    int button;
 
     switch (event) {
         case MOUSE_LEFT_DOWN:
-            ev.xbutton.button = Button1;
-            ev.type = ButtonPress;
+            down = True;
+            button = 1;
             break;
 
         case MOUSE_LEFT_UP:
-            ev.xbutton.button = Button1;
-            ev.type = ButtonRelease;
+            down = False;
+            button = 1;
             break;
 
         case MOUSE_RIGHT_DOWN:
-            ev.xbutton.button = Button3;
-            ev.type = ButtonPress;
+            down = True;
+            button = 3;
             break;
 
         case MOUSE_RIGHT_UP:
-            ev.xbutton.button = Button3;
-            ev.type = ButtonRelease;
+            down = False;
+            button = 3;
             break;
     }
 
-    ev.xbutton.same_screen = True;
-    ev.xbutton.subwindow = DefaultRootWindow(display);
-    while (ev.xbutton.subwindow) {
-        ev.xbutton.window = ev.xbutton.subwindow;
-        XQueryPointer(display, ev.xbutton.window,
-                      &ev.xbutton.root, &ev.xbutton.subwindow,
-                      &ev.xbutton.x_root, &ev.xbutton.y_root,
-                      &ev.xbutton.x, &ev.xbutton.y,
-                      &ev.xbutton.state);
-    }
-
-    // Send the event
-    XSendEvent(display, PointerWindow, True, ButtonPressMask, &ev);
+    XTestFakeButtonEvent(display, button, down, CurrentTime);
     XFlush(display);
 #endif
 }
