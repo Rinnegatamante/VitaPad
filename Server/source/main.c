@@ -10,34 +10,46 @@
 #include <psp2/sysmodule.h>
 #include <psp2/touch.h>
 #include <psp2/kernel/threadmgr.h>
-#define GAMEPAD_PORT 5000
-#define NET_INIT_SIZE 1*1024*1024
 
-// PadPacket struct
-typedef struct{
-	uint32_t buttons;
-	uint8_t lx;
-	uint8_t ly;
-	uint8_t rx;
-	uint8_t ry;
-	uint16_t tx;
-	uint16_t ty;
-	uint8_t click;
-} PadPacket;
+#include "../../common/types.h"
 
-// Values for click value
-#define NO_INPUT 0x00
-#define MOUSE_MOV 0x01
-#define LEFT_CLICK 0x08
-#define RIGHT_CLICK 0x10
+#include "ctrl.h"
+
+#define NET_INIT_SIZE 1 * 1024 * 1024
+
+static int control_thread(unsigned int args, void *argp)
+{
+	SceUID *pipe_id = (SceUID *)argp;
+
+	SceCtrlData pad, old_pad;
+	while (true)
+	{
+		sceCtrlPeekBufferPositive(0, &pad, 1);
+
+		if (is_different(&pad, &old_pad))
+		{
+			Packet pkg;
+			pkg.buttons = convert(pad);
+			pkg.lx = pad.lx;
+			pkg.ly = pad.ly;
+			pkg.rx = pad.rx;
+			pkg.ry = pad.ry;
+			sceKernelSendMsgPipe(*pipe_id, &pkg, sizeof(Packet), 0, NULL, NULL);
+			old_pad = pad;
+			sceKernelReceiveMsgPipe(*pipe_id, NULL, 0, 0, NULL, NULL);
+		}
+	}
+	return 0;
+}
 
 // Server thread
 volatile int connected = 0;
-static int server_thread(unsigned int args, void* argp){
-	
-	// Initializing a PadPacket
-	PadPacket pkg;
-	
+static int server_thread(unsigned int args, void *argp)
+{
+	SceUID *pipe_id = (SceUID *)argp;
+
+	SceUID epoll = sceNetEpollCreate("SERVER", 0);
+
 	// Initializing a socket
 	int fd = sceNetSocket("VitaPad", SCE_NET_AF_INET, SCE_NET_SOCK_STREAM, 0);
 	SceNetSockaddrIn serveraddr;
@@ -46,88 +58,103 @@ static int server_thread(unsigned int args, void* argp){
 	serveraddr.sin_port = sceNetHtons(GAMEPAD_PORT);
 	sceNetBind(fd, (SceNetSockaddr *)&serveraddr, sizeof(serveraddr));
 	sceNetListen(fd, 128);
-	
-	for (;;){
-		SceNetSockaddrIn clientaddr;
-		unsigned int addrlen = sizeof(clientaddr);
+
+	SceNetEpollEvent ev = {0};
+	ev.events = SCE_NET_EPOLLOUT | SCE_NET_EPOLLIN | SCE_NET_EPOLLHUP;
+	ev.data.fd = fd;
+
+	SceNetSockaddrIn clientaddr;
+	unsigned int addrlen = sizeof(clientaddr);
+	while (true)
+	{
 		int client = sceNetAccept(fd, (SceNetSockaddr *)&clientaddr, &addrlen);
-		if (client >= 0) {
+		if (client >= 0)
+		{
 			connected = 1;
-			char unused[8];
-			for (;;){
-				sceNetRecv(client,unused,256,0);
-				SceCtrlData pad;
-				sceCtrlPeekBufferPositive(0, &pad, 1);
-				SceTouchData touch;
-				sceTouchPeek(SCE_TOUCH_PORT_FRONT, &touch, 1);
-				SceTouchData retro;
-				sceTouchPeek(SCE_TOUCH_PORT_BACK, &retro, 1);
-				memcpy(&pkg, &pad.buttons, 8); // Buttons + analogs state
-				memcpy(&pkg.tx, &touch.report[0].x, 4); // Touch state
-				uint8_t flags = NO_INPUT;
-				if (touch.reportNum > 0) flags += MOUSE_MOV;
-				if (retro.reportNum > 0){
-					if (retro.report[0].x > 960) flags += RIGHT_CLICK;
-					else flags += LEFT_CLICK;
+			sceNetEpollControl(epoll, SCE_NET_EPOLL_CTL_ADD, client, &ev);
+
+			while (true)
+			{
+				SceNetEpollEvent ev = {0};
+				sceNetEpollWait(epoll, &ev, 2, 100);
+				if (ev.events & SCE_NET_EPOLLOUT)
+				{
+					Packet pkg;
+					sceKernelReceiveMsgPipe(*pipe_id, (char *)&pkg, sizeof(Packet), 0, NULL, NULL);
+					sceNetSend(client, &pkg, sizeof(Packet), 0);
+					sceKernelSendMsgPipe(*pipe_id, NULL, 0, 0, NULL, NULL);
 				}
-				pkg.click = flags;
-				sceNetSend(client, &pkg, sizeof(PadPacket), 0); // Sending PadPacket
+				if (ev.events & SCE_NET_EPOLLIN)
+				{
+					if (sceNetRecv(client, NULL, 0, 0) == 0)
+					{
+						connected = 0;
+						sceNetEpollControl(epoll, SCE_NET_EPOLL_CTL_DEL, client, &ev);
+						break;
+					}
+				}
 			}
 		}
 	}
-	
+
 	return 0;
 }
 
-vita2d_pgf* debug_font;
+vita2d_pgf *debug_font;
 uint32_t text_color;
 
-int main(){
-	
+int main()
+{
+
 	// Enabling analog and touch support
 	sceCtrlSetSamplingMode(SCE_CTRL_MODE_ANALOG);
-	sceTouchSetSamplingState(SCE_TOUCH_PORT_FRONT, 1);
-	sceTouchSetSamplingState(SCE_TOUCH_PORT_BACK, 1);
-	
+	sceTouchSetSamplingState(SCE_TOUCH_PORT_FRONT, SCE_TOUCH_SAMPLING_STATE_START);
+	sceTouchSetSamplingState(SCE_TOUCH_PORT_BACK, SCE_TOUCH_SAMPLING_STATE_START);
+
 	// Initializing graphics stuffs
 	vita2d_init();
 	vita2d_set_clear_color(RGBA8(0x00, 0x00, 0x00, 0xFF));
 	debug_font = vita2d_load_default_pgf();
 	uint32_t text_color = RGBA8(0xFF, 0xFF, 0xFF, 0xFF);
-	
+
 	// Initializing network stuffs
 	sceSysmoduleLoadModule(SCE_SYSMODULE_NET);
 	char vita_ip[32];
 	int ret = sceNetShowNetstat();
-	if (ret == SCE_NET_ERROR_ENOTINIT) {
+	if (ret == SCE_NET_ERROR_ENOTINIT)
+	{
 		SceNetInitParam initparam;
 		initparam.memory = malloc(NET_INIT_SIZE);
 		initparam.size = NET_INIT_SIZE;
 		initparam.flags = 0;
-		ret=sceNetInit(&initparam);
+		ret = sceNetInit(&initparam);
 	}
 	ret = sceNetCtlInit();
 	SceNetCtlInfo info;
-	ret=sceNetCtlInetGetInfo(SCE_NETCTL_INFO_GET_IP_ADDRESS, &info);
-	sprintf(vita_ip,"%s",info.ip_address);
+	ret = sceNetCtlInetGetInfo(SCE_NETCTL_INFO_GET_IP_ADDRESS, &info);
+	sprintf(vita_ip, "%s", info.ip_address);
 	SceNetInAddr vita_addr;
 	sceNetInetPton(SCE_NET_AF_INET, info.ip_address, &vita_addr);
-	
+
+	SceUID pipe = sceKernelCreateMsgPipe("SERV_CTRL", 0x40, 12, 0x1000, NULL);
+
 	// Starting server thread
-	SceUID thread = sceKernelCreateThread("VitaPad Thread",&server_thread, 0x10000100, 0x10000, 0, 0, NULL);
-	sceKernelStartThread(thread, 0, NULL);
-	
-	for (;;){
-		
+	SceUID serv_thread = sceKernelCreateThread("ServerThread", &server_thread, 0x10000100, 0x10000, 0, 0, NULL);
+	sceKernelStartThread(serv_thread, sizeof(SceUID), &pipe);
+
+	// Starting control thread
+	SceUID ctrl_thread = sceKernelCreateThread("ControlThread", &control_thread, 0x10000100, 0x10000, 0, 0, NULL);
+	sceKernelStartThread(ctrl_thread, sizeof(SceUID), &pipe);
+
+	while (true)
+	{
 		vita2d_start_drawing();
 		vita2d_clear_screen();
 		vita2d_pgf_draw_text(debug_font, 2, 20, text_color, 1.0, "VitaPad v.1.1 by Rinnegatamante");
-		vita2d_pgf_draw_textf(debug_font, 2, 60, text_color, 1.0, "Listening on:\nIP: %s\nPort: %d",vita_ip,GAMEPAD_PORT);
-		vita2d_pgf_draw_textf(debug_font, 2, 200, text_color, 1.0, "Status: %s",connected ? "Connected!" : "Waiting connection...");
+		vita2d_pgf_draw_textf(debug_font, 2, 60, text_color, 1.0, "Listening on:\nIP: %s\nPort: %d", vita_ip, GAMEPAD_PORT);
+		vita2d_pgf_draw_textf(debug_font, 2, 200, text_color, 1.0, "Status: %s", connected ? "Connected!" : "Waiting connection...");
 		vita2d_end_drawing();
 		vita2d_wait_rendering_done();
 		vita2d_swap_buffers();
-		
 	}
-	
 }
