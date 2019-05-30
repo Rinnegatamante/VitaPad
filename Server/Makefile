@@ -3,7 +3,7 @@ TITLE		:= VPAD00001
 SOURCES		:= source
 INCLUDES	:= include
 
-LIBS = -lvita2d -lSceKernel_stub -lSceSysmodule_stub -lSceCtrl_stub -lSceTouch_stub \
+LIBS = -lvita2d -lSceLibKernel_stub -lSceSysmodule_stub -lSceCtrl_stub -lSceTouch_stub \
 	-lm -lSceNet_stub -lSceNetCtl_stub -lSceAppUtil_stub -lScePgf_stub \
 	-ljpeg -lfreetype -lc -lScePower_stub -lSceCommonDialog_stub -lpng16 -lz \
 	-lSceGxm_stub -lSceDisplay_stub
