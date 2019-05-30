@@ -105,7 +105,7 @@ uint32_t text_color;
 int main(){
 	
 	// Enabling analog and touch support
-	sceCtrlSetSamplingMode(SCE_CTRL_MODE_ANALOG);
+	sceCtrlSetSamplingMode(SCE_CTRL_MODE_ANALOG_WIDE);
 	sceTouchSetSamplingState(SCE_TOUCH_PORT_FRONT, 1);
 	sceTouchSetSamplingState(SCE_TOUCH_PORT_BACK, 1);
 	
