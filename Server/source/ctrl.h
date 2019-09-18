@@ -3,7 +3,7 @@
 
 #include <psp2/ctrl.h>
 
-#include "../../common/types.h"
+#include "../../include/types.h"
 
 
 bool is_different(SceCtrlData *data1, SceCtrlData *data2);

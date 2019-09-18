@@ -11,7 +11,7 @@
 #include <psp2/touch.h>
 #include <psp2/kernel/threadmgr.h>
 
-#include "../../common/types.h"
+#include "../../include/types.h"
 
 #include "ctrl.h"
 
