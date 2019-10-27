@@ -12,7 +12,7 @@ int create_device()
 {
     int fd = open("/dev/uinput", O_WRONLY);
 
-    if (fd == -1)
+    if (fd < 0)
         return -1;
 
     if (ioctl(fd, UI_SET_EVBIT, EV_KEY) == -1)

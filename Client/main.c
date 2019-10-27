@@ -31,6 +31,7 @@
 #include "vendor/include/ViGEm/Common.h"
 #endif
 
+#include "main.h"
 #include "../include/types.h"
 
 #ifdef _WIN32
@@ -38,9 +39,10 @@ PVIGEM_TARGET target;
 #endif
 
 #ifdef __linux__
-#define die(str)           \
-    puts(str);             \
-    puts(strerror(errno)); \
+#define die(str)                   \
+    printf("%s : ", __FUNCTION__); \
+    puts(str);                     \
+    puts(strerror(errno));         \
     exit(EXIT_FAILURE);
 #endif
 
@@ -128,9 +130,8 @@ int main(int argc, char *argv[])
     fd[0].fd = sock;
     fd[0].events = POLLIN | POLLRDHUP;
 
-    while (poll(fd, 1, (int)5E3) != -1)
+    while (poll(fd, 1, -1) != -1)
     {
-        Packet packet;
         if (fd[0].revents & POLLRDHUP)
         {
             puts("Connection closed.");
@@ -138,74 +139,27 @@ int main(int argc, char *argv[])
         }
         if (fd[0].revents & POLLIN)
         {
+            Packet packet;
             if (recv(sock, (char *)&packet, sizeof(Packet), 0) != 0)
             {
-                if (emit(dev_fd, EV_ABS, ABS_X, packet.lx) == -1)
-                {
-                    die("WRITEERR: lx");
-                }
-                if (emit(dev_fd, EV_ABS, ABS_Y, packet.ly) == -1)
-                {
-                    die("WRITEERR: ly");
-                }
+                emit_abs(dev_fd, ABS_X, packet.lx);
+                emit_abs(dev_fd, ABS_Y, packet.ly);
 
-                if (emit(dev_fd, EV_ABS, ABS_RX, packet.rx) == -1)
-                {
-                    die("WRITEERR: rx");
-                }
-                if (emit(dev_fd, EV_ABS, ABS_RY, packet.ry) == -1)
-                {
-                    die("WRITEERR: ry");
-                }
+                emit_abs(dev_fd, ABS_RX, packet.rx);
+                emit_abs(dev_fd, ABS_RY, packet.ry);
 
-                if (emit(dev_fd, EV_KEY, BTN_B, packet.buttons.circle) == -1)
-                {
-                    die("WRITEERR: buttons.circle");
-                }
-                if (emit(dev_fd, EV_KEY, BTN_A, packet.buttons.cross) == -1)
-                {
-                    die("WRITEERR: buttons.cross");
-                }
-                if (emit(dev_fd, EV_KEY, BTN_Y, packet.buttons.square) == -1)
-                {
-                    die("WRITEERR: buttons.square");
-                }
-                if (emit(dev_fd, EV_KEY, BTN_X, packet.buttons.triangle) == -1)
-                {
-                    die("WRITEERR: buttons.triangle");
-                }
-                if (emit(dev_fd, EV_KEY, BTN_TL, packet.buttons.lt) == -1)
-                {
-                    die("WRITEERR: buttons.lt");
-                }
-                if (emit(dev_fd, EV_KEY, BTN_TR, packet.buttons.rt) == -1)
-                {
-                    die("WRITEERR: buttons.rt");
-                }
-                if (emit(dev_fd, EV_KEY, BTN_START, packet.buttons.start) == -1)
-                {
-                    die("WRITEERR: buttons.start");
-                }
-                if (emit(dev_fd, EV_KEY, BTN_SELECT, packet.buttons.select) == -1)
-                {
-                    die("WRITEERR: buttons.select");
-                }
-                if (emit(dev_fd, EV_KEY, BTN_DPAD_UP, packet.buttons.up) == -1)
-                {
-                    die("WRITEERR: buttons.up");
-                }
-                if (emit(dev_fd, EV_KEY, BTN_DPAD_DOWN, packet.buttons.down) == -1)
-                {
-                    die("WRITEERR: buttons.down");
-                }
-                if (emit(dev_fd, EV_KEY, BTN_DPAD_LEFT, packet.buttons.left) == -1)
-                {
-                    die("WRITEERR: buttons.left");
-                }
-                if (emit(dev_fd, EV_KEY, BTN_DPAD_RIGHT, packet.buttons.right) == -1)
-                {
-                    die("WRITEERR: buttons.right");
-                }
+                emit_button(dev_fd, BTN_B, packet.buttons.circle);
+                emit_button(dev_fd, BTN_A, packet.buttons.cross);
+                emit_button(dev_fd, BTN_Y, packet.buttons.square);
+                emit_button(dev_fd, BTN_X, packet.buttons.triangle);
+                emit_button(dev_fd, BTN_TL, packet.buttons.lt);
+                emit_button(dev_fd, BTN_TR, packet.buttons.rt);
+                emit_button(dev_fd, BTN_START, packet.buttons.start);
+                emit_button(dev_fd, BTN_SELECT, packet.buttons.select);
+                emit_button(dev_fd, BTN_DPAD_UP, packet.buttons.up);
+                emit_button(dev_fd, BTN_DPAD_DOWN, packet.buttons.down);
+                emit_button(dev_fd, BTN_DPAD_LEFT, packet.buttons.left);
+                emit_button(dev_fd, BTN_DPAD_RIGHT, packet.buttons.right);
             }
         }
     }
@@ -228,46 +182,23 @@ int main(int argc, char *argv[])
             {
                 XUSB_REPORT report;
                 XUSB_REPORT_INIT(&report);
-                report.sThumbLX = (packet.lx - 128) * 128;
-                report.sThumbLY = (packet.ly - 128) * 128;
-                report.sThumbRX = (packet.rx - 128) * 128;
-                report.sThumbRY = (packet.ry - 128) * 128;
+                abs_report(report.sThumbLX, packet.lx);
+                abs_report(report.sThumbLY, packet.ly);
+                abs_report(report.sThumbRX, packet.rx);
+                abs_report(report.sThumbRY, packet.ry);
 
-                if (packet.buttons.circle)
-                    report.wButtons |= XUSB_GAMEPAD_B;
-
-                if (packet.buttons.cross)
-                    report.wButtons |= XUSB_GAMEPAD_A;
-
-                if (packet.buttons.square)
-                    report.wButtons |= XUSB_GAMEPAD_X;
-
-                if (packet.buttons.triangle)
-                    report.wButtons |= XUSB_GAMEPAD_Y;
-
-                if (packet.buttons.lt)
-                    report.wButtons |= XUSB_GAMEPAD_LEFT_SHOULDER;
-
-                if (packet.buttons.rt)
-                    report.wButtons |= XUSB_GAMEPAD_RIGHT_SHOULDER;
-
-                if (packet.buttons.start)
-                    report.wButtons |= XUSB_GAMEPAD_START;
-
-                if (packet.buttons.select)
-                    report.wButtons |= XUSB_GAMEPAD_BACK;
-
-                if (packet.buttons.up)
-                    report.wButtons |= XUSB_GAMEPAD_DPAD_UP;
-
-                if (packet.buttons.down)
-                    report.wButtons |= XUSB_GAMEPAD_DPAD_DOWN;
-
-                if (packet.buttons.left)
-                    report.wButtons |= XUSB_GAMEPAD_DPAD_LEFT;
-
-                if (packet.buttons.right)
-                    report.wButtons |= XUSB_GAMEPAD_DPAD_RIGHT;
+                button_report(report.wButtons, packet.buttons.circle, XUSB_GAMEPAD_B);
+                button_report(report.wButtons, packet.buttons.cross, XUSB_GAMEPAD_A);
+                button_report(report.wButtons, packet.buttons.square, XUSB_GAMEPAD_X);
+                button_report(report.wButtons, packet.buttons.triangle, XUSB_GAMEPAD_Y);
+                button_report(report.wButtons, packet.buttons.lt, XUSB_GAMEPAD_LEFT_SHOULDER);
+                button_report(report.wButtons, packet.buttons.rt, XUSB_GAMEPAD_RIGHT_SHOULDER);
+                button_report(report.wButtons, packet.buttons.start, XUSB_GAMEPAD_START);
+                button_report(report.wButtons, packet.buttons.select, XUSB_GAMEPAD_BACK);
+                button_report(report.wButtons, packet.buttons.up, XUSB_GAMEPAD_DPAD_UP);
+                button_report(report.wButtons, packet.buttons.down, XUSB_GAMEPAD_DPAD_DOWN);
+                button_report(report.wButtons, packet.buttons.left, XUSB_GAMEPAD_DPAD_LEFT);
+                button_report(report.wButtons, packet.buttons.right, XUSB_GAMEPAD_DPAD_RIGHT);
 
                 if (!VIGEM_SUCCESS(send_report(report, target)))
                 {
