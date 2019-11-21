@@ -1,3 +1,4 @@
+cmake_minimum_required(VERSION 2.8)
 # VitaPad
 set(PROJECT VitaPad)
 
@@ -10,7 +11,11 @@ add_executable(${PROJECT}
     uinput.c
 )
 
-elseif (WIN32)
+target_link_libraries(${PROJECT}
+    evdev
+)
+endif (LINUX)
+if (WIN32)
 
 add_custom_command(OUTPUT  vendor/lib/release/x64/ViGEmClient.lib
                    COMMAND vendor/build.ps1 -configuration Release_LIB|x64
@@ -25,4 +30,4 @@ add_executable(${PROJECT}
 )
 target_link_libraries(${PROJECT} ${CMAKE_SOURCE_DIR}/vendor/lib/release/x64/ViGEmClient.lib)
 
-endif (LINUX)
+endif (WIN32)

@@ -1,177 +1,146 @@
 #ifdef __linux__
 
-#include <stdio.h>
-#include <fcntl.h>
-#include <string.h>
-#include <unistd.h>
+#include "uinput.h"
 
-#include <linux/input.h>
-#include <linux/uinput.h>
+int err;
 
-int create_device()
+struct vita create_device()
 {
-    int fd = open("/dev/uinput", O_WRONLY);
+    struct libevdev *dev = libevdev_new();
+    struct libevdev_uinput *uidev;
 
-    if (fd < 0)
-        return -1;
+    libevdev_set_name(dev, "PS VITA");
+    libevdev_set_id_bustype(dev, BUS_VIRTUAL);
+    libevdev_set_id_vendor(dev, 0x54c);
+    libevdev_set_id_product(dev, 0x2d2);
+    libevdev_set_id_version(dev, 2);
 
-    if (ioctl(fd, UI_SET_EVBIT, EV_KEY) == -1)
-    {
-        return -1;
-    }
-    if (ioctl(fd, UI_SET_KEYBIT, BTN_A) == -1)
-    {
-        return -1;
-    }
-    if (ioctl(fd, UI_SET_KEYBIT, BTN_B) == -1)
-    {
-        return -1;
-    }
-    if (ioctl(fd, UI_SET_KEYBIT, BTN_X) == -1)
-    {
-        return -1;
-    }
-    if (ioctl(fd, UI_SET_KEYBIT, BTN_Y) == -1)
-    {
-        return -1;
-    }
-    if (ioctl(fd, UI_SET_KEYBIT, BTN_TL) == -1)
-    {
-        return -1;
-    }
-    if (ioctl(fd, UI_SET_KEYBIT, BTN_TR) == -1)
-    {
-        return -1;
-    }
-    if (ioctl(fd, UI_SET_KEYBIT, BTN_START) == -1)
-    {
-        return -1;
-    }
-    if (ioctl(fd, UI_SET_KEYBIT, BTN_SELECT) == -1)
-    {
-        return -1;
-    }
-    if (ioctl(fd, UI_SET_KEYBIT, BTN_DPAD_UP) == -1)
-    {
-        return -1;
-    }
-    if (ioctl(fd, UI_SET_KEYBIT, BTN_DPAD_DOWN) == -1)
-    {
-        return -1;
-    }
-    if (ioctl(fd, UI_SET_KEYBIT, BTN_DPAD_LEFT) == -1)
-    {
-        return -1;
-    }
-    if (ioctl(fd, UI_SET_KEYBIT, BTN_DPAD_RIGHT) == -1)
-    {
-        return -1;
-    }
+    libevdev_enable_event_type(dev, EV_KEY);
+    libevdev_enable_event_code(dev, EV_KEY, BTN_A, NULL);
+    libevdev_enable_event_code(dev, EV_KEY, BTN_B, NULL);
+    libevdev_enable_event_code(dev, EV_KEY, BTN_X, NULL);
+    libevdev_enable_event_code(dev, EV_KEY, BTN_Y, NULL);
+    libevdev_enable_event_code(dev, EV_KEY, BTN_TL, NULL);
+    libevdev_enable_event_code(dev, EV_KEY, BTN_TR, NULL);
+    libevdev_enable_event_code(dev, EV_KEY, BTN_START, NULL);
+    libevdev_enable_event_code(dev, EV_KEY, BTN_SELECT, NULL);
+    libevdev_enable_event_code(dev, EV_KEY, BTN_DPAD_UP, NULL);
+    libevdev_enable_event_code(dev, EV_KEY, BTN_DPAD_DOWN, NULL);
+    libevdev_enable_event_code(dev, EV_KEY, BTN_DPAD_LEFT, NULL);
+    libevdev_enable_event_code(dev, EV_KEY, BTN_DPAD_RIGHT, NULL);
 
-    if (ioctl(fd, UI_SET_EVBIT, EV_ABS) == -1)
-    {
-        return -1;
-    }
-    if (ioctl(fd, UI_SET_ABSBIT, ABS_X) == -1)
-    {
-        return -1;
-    }
-    if (ioctl(fd, UI_SET_ABSBIT, ABS_Y) == -1)
-    {
-        return -1;
-    }
-    if (ioctl(fd, UI_SET_ABSBIT, ABS_RX) == -1)
-    {
-        return -1;
-    }
-    if (ioctl(fd, UI_SET_ABSBIT, ABS_RY) == -1)
-    {
-        return -1;
-    }
+    struct input_absinfo joystick_abs_info = {
+        .flat = 128,
+        .fuzz = 0, // Already fuzzed
+        .maximum = 255,
+        .minimum = 0,
+        .resolution = 255,
+    };
+    libevdev_enable_event_type(dev, EV_ABS);
+    libevdev_enable_event_code(dev, EV_ABS, ABS_X, &joystick_abs_info);
+    libevdev_enable_event_code(dev, EV_ABS, ABS_Y, &joystick_abs_info);
+    libevdev_enable_event_code(dev, EV_ABS, ABS_RX, &joystick_abs_info);
+    libevdev_enable_event_code(dev, EV_ABS, ABS_RY, &joystick_abs_info);
 
-    struct input_absinfo abs_info;
-    abs_info.flat = 128;
-    abs_info.fuzz = 2;
-    abs_info.maximum = 255;
-    abs_info.minimum = 0;
-    abs_info.resolution = 255;
+    // Touchscreen (front)
+    struct input_absinfo front_mt_x_info = {.minimum = 0, .maximum = 1919};
+    libevdev_enable_event_code(dev, EV_ABS, ABS_MT_POSITION_X, &front_mt_x_info);
+    struct input_absinfo front_mt_y_info = {.minimum = 0, .maximum = 1087};
+    libevdev_enable_event_code(dev, EV_ABS, ABS_MT_POSITION_Y, &front_mt_y_info);
+    struct input_absinfo front_mt_id_info = {.minimum = 0, .maximum = 255}; //TODO: Query infos
+    libevdev_enable_event_code(dev, EV_ABS, ABS_MT_TRACKING_ID, &front_mt_id_info);
+    struct input_absinfo front_mt_slot_info = {.minimum = 0, .maximum = 5}; // According to vitasdk docs
+    libevdev_enable_event_code(dev, EV_ABS, ABS_MT_SLOT, &front_mt_slot_info);
+    struct input_absinfo front_mt_pressure_info = {.minimum = 1, .maximum = 128};
+    libevdev_enable_event_code(dev, EV_ABS, ABS_MT_PRESSURE, &front_mt_pressure_info);
 
-    struct uinput_abs_setup abs_x;
-    abs_x.code = ABS_X;
-    abs_x.absinfo = abs_info;
-
-    struct uinput_abs_setup abs_y;
-    abs_y.code = ABS_Y;
-    abs_y.absinfo = abs_info;
-
-    struct uinput_abs_setup abs_rx;
-    abs_rx.code = ABS_RX;
-    abs_rx.absinfo = abs_info;
-
-    struct uinput_abs_setup abs_ry;
-    abs_ry.code = ABS_RY;
-    abs_ry.absinfo = abs_info;
-
-    if (ioctl(fd, UI_ABS_SETUP, &abs_x) == -1)
-    {
-        return -1;
-    }
-    if (ioctl(fd, UI_ABS_SETUP, &abs_y) == -1)
-    {
-        return -1;
-    }
-    if (ioctl(fd, UI_ABS_SETUP, &abs_rx) == -1)
-    {
-        return -1;
-    }
-    if (ioctl(fd, UI_ABS_SETUP, &abs_ry) == -1)
-    {
-        return -1;
-    }
-
-    struct uinput_setup uidev;
-    memset(&uidev, 0, sizeof(uidev));
-    uidev.id.bustype = BUS_VIRTUAL;
-    uidev.id.vendor = 0x54c;
-    uidev.id.product = 0x2d2;
-    uidev.id.version = 2;
-    strcpy(uidev.name, "PSVITA");
-
-    if (ioctl(fd, UI_DEV_SETUP, &uidev) == -1)
-    {
-        return -1;
-    }
-    
-    if (ioctl(fd, UI_DEV_CREATE) == -1)
-    {
-        return -1;
-    }
+    err = libevdev_uinput_create_from_device(dev,
+                                             LIBEVDEV_UINPUT_OPEN_MANAGED,
+                                             &uidev);
+                                             
 
     sleep(1);
 
-    return fd;
+
+    // Have to create another device because sensors can't be mixed with directional axes
+    // and we can't assign the back touch surface along with the touchscreen.
+    // So this second device contains info for the motion sensors and the back touch surface.
+    struct libevdev *sensor_dev = libevdev_new();
+    struct libevdev_uinput *sensor_uidev;
+
+    libevdev_set_name(sensor_dev, "PS VITA (Sensors)");
+    libevdev_set_id_bustype(sensor_dev, BUS_VIRTUAL);
+    libevdev_set_id_vendor(sensor_dev, 0x54c);
+    libevdev_set_id_product(sensor_dev, 0x2d2);
+    libevdev_set_id_version(sensor_dev, 3);
+    libevdev_enable_property(sensor_dev, INPUT_PROP_ACCELEROMETER);
+
+    // struct input_absinfo accel_abs_info = {}; //TODO: Query infos
+    // libevdev_enable_event_type(dev, EV_ABS);
+    // libevdev_enable_event_code(dev, EV_ABS, ABS_X, &accel_abs_info);
+    // libevdev_enable_event_code(dev, EV_ABS, ABS_Y, &accel_abs_info);
+    // libevdev_enable_event_code(dev, EV_ABS, ABS_Z, &accel_abs_info);
+
+    // struct input_absinfo gyro_abs_info = {}; //TODO: Query infos
+    // libevdev_enable_event_code(dev, EV_ABS, ABS_RX, &gyro_abs_info);
+    // libevdev_enable_event_code(dev, EV_ABS, ABS_RY, &gyro_abs_info);
+    // libevdev_enable_event_code(dev, EV_ABS, ABS_RZ, &gyro_abs_info);
+
+    struct input_absinfo mt_x_info = {.minimum = 0, .maximum = 1919};
+    libevdev_enable_event_code(sensor_dev, EV_ABS, ABS_MT_POSITION_X, &mt_x_info);
+    struct input_absinfo mt_y_info = {.minimum = 108, .maximum = 889};
+    libevdev_enable_event_code(sensor_dev, EV_ABS, ABS_MT_POSITION_Y, &mt_y_info);
+    struct input_absinfo mt_id_info = {.minimum = 0, .maximum = 255}; //TODO: Query infos
+    libevdev_enable_event_code(sensor_dev, EV_ABS, ABS_MT_TRACKING_ID, &mt_id_info);
+    struct input_absinfo mt_slot_info = {.minimum = 0, .maximum = 3}; // According to vitasdk docs
+    libevdev_enable_event_code(sensor_dev, EV_ABS, ABS_MT_SLOT, &mt_slot_info);
+    struct input_absinfo mt_pressure_info = {.minimum = 1, .maximum = 128};
+    libevdev_enable_event_code(sensor_dev, EV_ABS, ABS_MT_PRESSURE, &mt_pressure_info);
+
+    err = libevdev_uinput_create_from_device(sensor_dev,
+                                             LIBEVDEV_UINPUT_OPEN_MANAGED,
+                                             &sensor_uidev);
+
+    sleep(1);
+
+    struct vita vita_struct = {
+        .dev = uidev,
+        .sensor_dev = sensor_uidev,
+    };
+
+    return vita_struct;
 }
 
-int emit(int fd, int type, int code, int val)
+int emit(struct libevdev_uinput *dev, int type, int code, int val)
 {
-    struct input_event ev;
-
-    ev.type = type;
-    ev.code = code;
-    ev.value = val;
-
-    if (write(fd, &ev, sizeof(ev)) == -1)
-        return -1;
-
-    // Sync data
-    ev.type = EV_SYN;
-    ev.code = SYN_REPORT;
-    ev.value = 0;
-
-    if (write(fd, &ev, sizeof(ev)) == -1)
-        return -1;
+    if ((err = libevdev_uinput_write_event(dev, type, code, val)) != 0)
+        return err;
+    if ((err = libevdev_uinput_write_event(dev, EV_SYN, SYN_REPORT, 0)) != 0)
+        return err;
 
     return 0;
+}
+
+int emit_touch(struct libevdev_uinput *dev, uint8_t slot, uint8_t id, int16_t x, int16_t y, uint8_t pressure)
+{
+    if ((err = libevdev_uinput_write_event(dev, EV_ABS, ABS_MT_SLOT, slot)) != 0)
+        return err;
+    if ((err = libevdev_uinput_write_event(dev, EV_ABS, ABS_MT_TRACKING_ID, id)) != 0)
+        return err;
+    if ((err = libevdev_uinput_write_event(dev, EV_ABS, ABS_MT_POSITION_X, x)) != 0)
+        return err;
+    if ((err = libevdev_uinput_write_event(dev, EV_ABS, ABS_MT_POSITION_Y, y)) != 0)
+        return err;
+    if ((err = libevdev_uinput_write_event(dev, EV_ABS, ABS_MT_PRESSURE, pressure)) != 0)
+        return err;
+
+    return 0;
+}
+
+int emit_touch_sync(struct libevdev_uinput *dev)
+{
+    if ((err = libevdev_uinput_write_event(dev, EV_SYN, SYN_REPORT, 0)) != 0)
+        return err;
 }
 
 #endif // __linux__

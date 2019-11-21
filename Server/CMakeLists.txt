@@ -52,6 +52,7 @@ target_link_libraries(${VITA_APP_NAME}
   z
   SceGxm_stub
   SceDisplay_stub
+  SceMotion_stub
 )
 
 vita_create_self(${VITA_APP_NAME}.self ${VITA_APP_NAME})

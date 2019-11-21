@@ -7,6 +7,7 @@
 #include <string.h>
 
 #ifdef __linux__
+#define _GNU_SOURCE
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -32,7 +33,7 @@
 #endif
 
 #include "main.h"
-#include "../include/types.h"
+#include "../include/net_types.h"
 
 #ifdef _WIN32
 PVIGEM_TARGET target;
@@ -58,8 +59,8 @@ void cleanup(void)
 int main(int argc, char *argv[])
 {
 #ifdef __linux__
-    int dev_fd = create_device();
-    if (dev_fd == -1)
+    struct vita vita_dev = create_device();
+    if (vita_dev.dev == NULL || vita_dev.sensor_dev == NULL)
     {
         die("uinput error");
     }
@@ -110,7 +111,7 @@ int main(int argc, char *argv[])
 
     vita.sin_addr.s_addr = inet_addr(ip);
     vita.sin_family = AF_INET;
-    vita.sin_port = htons(GAMEPAD_PORT);
+    vita.sin_port = htons(NET_PORT);
 
 #ifdef __linux__
     if (connect(sock, (struct sockaddr *)&vita, sizeof(struct sockaddr)) == -1)
@@ -139,27 +140,61 @@ int main(int argc, char *argv[])
         }
         if (fd[0].revents & POLLIN)
         {
-            Packet packet;
-            if (recv(sock, (char *)&packet, sizeof(Packet), 0) != 0)
+            Packet pkg;
+            if (recv(sock, (char *)&pkg, sizeof(Packet), 0) > 0)
             {
-                emit_abs(dev_fd, ABS_X, packet.lx);
-                emit_abs(dev_fd, ABS_Y, packet.ly);
+                switch (pkg.type)
+                {
+                case PAD:
+                    emit_abs(vita_dev.dev, ABS_X, pkg.packet.pad.lx);
+                    emit_abs(vita_dev.dev, ABS_Y, pkg.packet.pad.ly);
 
-                emit_abs(dev_fd, ABS_RX, packet.rx);
-                emit_abs(dev_fd, ABS_RY, packet.ry);
+                    emit_abs(vita_dev.dev, ABS_RX, pkg.packet.pad.rx);
+                    emit_abs(vita_dev.dev, ABS_RY, pkg.packet.pad.ry);
 
-                emit_button(dev_fd, BTN_B, packet.buttons.circle);
-                emit_button(dev_fd, BTN_A, packet.buttons.cross);
-                emit_button(dev_fd, BTN_Y, packet.buttons.square);
-                emit_button(dev_fd, BTN_X, packet.buttons.triangle);
-                emit_button(dev_fd, BTN_TL, packet.buttons.lt);
-                emit_button(dev_fd, BTN_TR, packet.buttons.rt);
-                emit_button(dev_fd, BTN_START, packet.buttons.start);
-                emit_button(dev_fd, BTN_SELECT, packet.buttons.select);
-                emit_button(dev_fd, BTN_DPAD_UP, packet.buttons.up);
-                emit_button(dev_fd, BTN_DPAD_DOWN, packet.buttons.down);
-                emit_button(dev_fd, BTN_DPAD_LEFT, packet.buttons.left);
-                emit_button(dev_fd, BTN_DPAD_RIGHT, packet.buttons.right);
+                    emit_button(vita_dev.dev, BTN_B, pkg.packet.pad.buttons.circle);
+                    emit_button(vita_dev.dev, BTN_A, pkg.packet.pad.buttons.cross);
+                    emit_button(vita_dev.dev, BTN_Y, pkg.packet.pad.buttons.square);
+                    emit_button(vita_dev.dev, BTN_X, pkg.packet.pad.buttons.triangle);
+                    emit_button(vita_dev.dev, BTN_TL, pkg.packet.pad.buttons.lt);
+                    emit_button(vita_dev.dev, BTN_TR, pkg.packet.pad.buttons.rt);
+                    emit_button(vita_dev.dev, BTN_START, pkg.packet.pad.buttons.start);
+                    emit_button(vita_dev.dev, BTN_SELECT, pkg.packet.pad.buttons.select);
+                    emit_button(vita_dev.dev, BTN_DPAD_UP, pkg.packet.pad.buttons.up);
+                    emit_button(vita_dev.dev, BTN_DPAD_DOWN, pkg.packet.pad.buttons.down);
+                    emit_button(vita_dev.dev, BTN_DPAD_LEFT, pkg.packet.pad.buttons.left);
+                    emit_button(vita_dev.dev, BTN_DPAD_RIGHT, pkg.packet.pad.buttons.right);
+                    break;
+                case TOUCH:
+                    TouchPacket touch = pkg.packet.touch;
+                    switch (touch.port)
+                    {
+                    case FRONT:
+                        for (size_t i = 0; i < touch.num_rep; i++)
+                        {
+                            emit_touch(vita_dev.dev, i, touch.reports[i].id, touch.reports[i].x, touch.reports[i].y, touch.reports[i].pressure);
+                        }
+                        emit_touch_sync(vita_dev.dev);
+                        break;
+                    case BACK:
+                        for (size_t i = 0; i < touch.num_rep; i++)
+                        {
+                            emit_touch(vita_dev.sensor_dev, i, touch.reports[i].id, touch.reports[i].x, touch.reports[i].y, touch.reports[i].pressure);
+                        }
+                        emit_touch_sync(vita_dev.sensor_dev);
+                        break;
+                    default:
+                        break;
+                    }
+                    break;
+                case MOTION:
+                    MotionPacket motion = pkg.packet.motion;
+                    //TODO:
+                    break;
+
+                default:
+                    break;
+                }
             }
         }
     }
@@ -177,41 +212,52 @@ int main(int argc, char *argv[])
 
         if (fd.revents & POLLRDNORM)
         {
-            Packet packet;
-            if (recv(sock, (char *)&packet, sizeof(Packet), 0) != 0)
+            Packet pkg;
+            if (recv(sock, (char *)&pkg, sizeof(Packet), 0) > 0)
             {
-                XUSB_REPORT report;
-                XUSB_REPORT_INIT(&report);
-                abs_report(report.sThumbLX, packet.lx);
-                abs_report(report.sThumbLY, packet.ly);
-                abs_report(report.sThumbRX, packet.rx);
-                abs_report(report.sThumbRY, packet.ry);
-
-                button_report(report.wButtons, packet.buttons.circle, XUSB_GAMEPAD_B);
-                button_report(report.wButtons, packet.buttons.cross, XUSB_GAMEPAD_A);
-                button_report(report.wButtons, packet.buttons.square, XUSB_GAMEPAD_X);
-                button_report(report.wButtons, packet.buttons.triangle, XUSB_GAMEPAD_Y);
-                button_report(report.wButtons, packet.buttons.lt, XUSB_GAMEPAD_LEFT_SHOULDER);
-                button_report(report.wButtons, packet.buttons.rt, XUSB_GAMEPAD_RIGHT_SHOULDER);
-                button_report(report.wButtons, packet.buttons.start, XUSB_GAMEPAD_START);
-                button_report(report.wButtons, packet.buttons.select, XUSB_GAMEPAD_BACK);
-                button_report(report.wButtons, packet.buttons.up, XUSB_GAMEPAD_DPAD_UP);
-                button_report(report.wButtons, packet.buttons.down, XUSB_GAMEPAD_DPAD_DOWN);
-                button_report(report.wButtons, packet.buttons.left, XUSB_GAMEPAD_DPAD_LEFT);
-                button_report(report.wButtons, packet.buttons.right, XUSB_GAMEPAD_DPAD_RIGHT);
-
-                if (!VIGEM_SUCCESS(send_report(report, target)))
+                switch (pkg.type)
                 {
-                    puts("report error");
-                    exit(EXIT_FAILURE);
+                case PAD:
+                    XUSB_REPORT report;
+                    XUSB_REPORT_INIT(&report);
+                    abs_report(report.sThumbLX, pkg.packet.pad.lx);
+                    abs_report(report.sThumbLY, pkg.packet.pad.ly);
+                    abs_report(report.sThumbRX, pkg.packet.pad.rx);
+                    abs_report(report.sThumbRY, pkg.packet.pad.ry);
+
+                    button_report(report.wButtons, pkg.packet.pad.buttons.circle, XUSB_GAMEPAD_B);
+                    button_report(report.wButtons, pkg.packet.pad.buttons.cross, XUSB_GAMEPAD_A);
+                    button_report(report.wButtons, pkg.packet.pad.buttons.square, XUSB_GAMEPAD_X);
+                    button_report(report.wButtons, pkg.packet.pad.buttons.triangle, XUSB_GAMEPAD_Y);
+                    button_report(report.wButtons, pkg.packet.pad.buttons.lt, XUSB_GAMEPAD_LEFT_SHOULDER);
+                    button_report(report.wButtons, pkg.packet.pad.buttons.rt, XUSB_GAMEPAD_RIGHT_SHOULDER);
+                    button_report(report.wButtons, pkg.packet.pad.buttons.start, XUSB_GAMEPAD_START);
+                    button_report(report.wButtons, pkg.packet.pad.buttons.select, XUSB_GAMEPAD_BACK);
+                    button_report(report.wButtons, pkg.packet.pad.buttons.up, XUSB_GAMEPAD_DPAD_UP);
+                    button_report(report.wButtons, pkg.packet.pad.buttons.down, XUSB_GAMEPAD_DPAD_DOWN);
+                    button_report(report.wButtons, pkg.packet.pad.buttons.left, XUSB_GAMEPAD_DPAD_LEFT);
+                    button_report(report.wButtons, pkg.packet.pad.buttons.right, XUSB_GAMEPAD_DPAD_RIGHT);
+
+                    if (!VIGEM_SUCCESS(send_report(report, target)))
+                    {
+                        puts("report error");
+                        exit(EXIT_FAILURE);
+                    }
+                    break;
+                case TOUCH:
+                    //TODO: Wait for ViGem touchpad support
+                    break;
+                case MOTION:
+                    MotionPacket motion = pkg.packet.motion;
+                    //TODO: Wait for ViGem motion support
+                    break;
+
+                default:
+                    break;
                 }
             }
         }
     }
-#endif
-
-#ifdef _WIN32
-    WSACleanup();
 #endif
 
     return EXIT_SUCCESS;
