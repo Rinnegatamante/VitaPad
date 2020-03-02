@@ -29,12 +29,6 @@ typedef struct _pad_packet
     uint8_t ry;
 } PadPacket;
 
-typedef enum _touch_port
-{
-    FRONT = 0, // SCE_TOUCH_PORT_FRONT = 0
-    BACK = 1,  // SCE_TOUCH_PORT_BACK = 1
-} TOUCH_PORT;
-
 typedef struct _touch_report
 {
     uint8_t pressure;
@@ -43,9 +37,17 @@ typedef struct _touch_report
     int16_t y;
 } TouchReport;
 
+typedef enum _config_touch
+{
+    DISABLED = 0,
+    FRONT = 0x1,
+    BACK = 0x2,
+    FRONT_AND_BACK = FRONT | BACK
+} CONFIG_TOUCH;
+
 typedef struct _touch_packet
 {
-    TOUCH_PORT port;
+    CONFIG_TOUCH port;
     TouchReport reports[6];
     uint8_t num_rep;
 } TouchPacket;
@@ -71,7 +73,7 @@ typedef enum _packet_type {
 
 typedef struct _packet {
     PACKET_TYPE type;
-    typedef union _packet
+    union __packet
     {
         PadPacket pad;
         TouchPacket touch;
@@ -79,18 +81,12 @@ typedef struct _packet {
     } packet;
 } Packet;
 
-typedef enum _config_touch
-{
-    DISABLED = 0,
-    FRONT = 0x1,
-    BACK = 0x2,
-    FRONT_AND_BACK = FRONT | BACK
-} CONFIG_TOUCH;
 
 typedef struct _config_packet
 {
     CONFIG_TOUCH touch_config;
     bool motion_activate;
+    bool disconnect;
 } ConfigPacket;
 
 #define NET_PORT 5000

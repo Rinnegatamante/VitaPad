@@ -166,20 +166,19 @@ int main(int argc, char *argv[])
                     emit_button(vita_dev.dev, BTN_DPAD_RIGHT, pkg.packet.pad.buttons.right);
                     break;
                 case TOUCH:
-                    TouchPacket touch = pkg.packet.touch;
-                    switch (touch.port)
+                    switch (pkg.packet.touch.port)
                     {
                     case FRONT:
-                        for (size_t i = 0; i < touch.num_rep; i++)
+                        for (size_t i = 0; i < pkg.packet.touch.num_rep; i++)
                         {
-                            emit_touch(vita_dev.dev, i, touch.reports[i].id, touch.reports[i].x, touch.reports[i].y, touch.reports[i].pressure);
+                            emit_touch(vita_dev.dev, i, pkg.packet.touch.reports[i].id, pkg.packet.touch.reports[i].x, pkg.packet.touch.reports[i].y, pkg.packet.touch.reports[i].pressure);
                         }
                         emit_touch_sync(vita_dev.dev);
                         break;
                     case BACK:
-                        for (size_t i = 0; i < touch.num_rep; i++)
+                        for (size_t i = 0; i < pkg.packet.touch.num_rep; i++)
                         {
-                            emit_touch(vita_dev.sensor_dev, i, touch.reports[i].id, touch.reports[i].x, touch.reports[i].y, touch.reports[i].pressure);
+                            emit_touch(vita_dev.sensor_dev, i, pkg.packet.touch.reports[i].id, pkg.packet.touch.reports[i].x, pkg.packet.touch.reports[i].y, pkg.packet.touch.reports[i].pressure);
                         }
                         emit_touch_sync(vita_dev.sensor_dev);
                         break;
@@ -188,7 +187,6 @@ int main(int argc, char *argv[])
                     }
                     break;
                 case MOTION:
-                    MotionPacket motion = pkg.packet.motion;
                     //TODO:
                     break;
 
