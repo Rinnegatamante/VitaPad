@@ -113,9 +113,9 @@ struct vita create_device()
 
 int emit(struct libevdev_uinput *dev, int type, int code, int val)
 {
-    if ((err = libevdev_uinput_write_event(dev, type, code, val)) != 0)
+    if ((err = libevdev_uinput_write_event(dev, type, code, val)) == -1)
         return err;
-    if ((err = libevdev_uinput_write_event(dev, EV_SYN, SYN_REPORT, 0)) != 0)
+    if ((err = libevdev_uinput_write_event(dev, EV_SYN, SYN_REPORT, 0)) == -1)
         return err;
 
     return 0;
@@ -123,15 +123,15 @@ int emit(struct libevdev_uinput *dev, int type, int code, int val)
 
 int emit_touch(struct libevdev_uinput *dev, uint8_t slot, uint8_t id, int16_t x, int16_t y, uint8_t pressure)
 {
-    if ((err = libevdev_uinput_write_event(dev, EV_ABS, ABS_MT_SLOT, slot)) != 0)
+    if ((err = libevdev_uinput_write_event(dev, EV_ABS, ABS_MT_SLOT, slot)) == -1)
         return err;
-    if ((err = libevdev_uinput_write_event(dev, EV_ABS, ABS_MT_TRACKING_ID, id)) != 0)
+    if ((err = libevdev_uinput_write_event(dev, EV_ABS, ABS_MT_TRACKING_ID, id)) == -1)
         return err;
-    if ((err = libevdev_uinput_write_event(dev, EV_ABS, ABS_MT_POSITION_X, x)) != 0)
+    if ((err = libevdev_uinput_write_event(dev, EV_ABS, ABS_MT_POSITION_X, x)) == -1)
         return err;
-    if ((err = libevdev_uinput_write_event(dev, EV_ABS, ABS_MT_POSITION_Y, y)) != 0)
+    if ((err = libevdev_uinput_write_event(dev, EV_ABS, ABS_MT_POSITION_Y, y)) == -1)
         return err;
-    if ((err = libevdev_uinput_write_event(dev, EV_ABS, ABS_MT_PRESSURE, pressure)) != 0)
+    if ((err = libevdev_uinput_write_event(dev, EV_ABS, ABS_MT_PRESSURE, pressure)) == -1)
         return err;
 
     return 0;
@@ -139,8 +139,10 @@ int emit_touch(struct libevdev_uinput *dev, uint8_t slot, uint8_t id, int16_t x,
 
 int emit_touch_sync(struct libevdev_uinput *dev)
 {
-    if ((err = libevdev_uinput_write_event(dev, EV_SYN, SYN_REPORT, 0)) != 0)
+    if ((err = libevdev_uinput_write_event(dev, EV_SYN, SYN_REPORT, 0)) == -1)
         return err;
+
+    return 0;
 }
 
 #endif // __linux__

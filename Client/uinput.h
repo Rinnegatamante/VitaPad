@@ -7,8 +7,8 @@
 #include <unistd.h>
 #include <stdint.h>
 
-#include <libevdev.h>
-#include <libevdev-uinput.h>
+#include <libevdev/libevdev.h>
+#include <libevdev/libevdev-uinput.h>
 
 struct vita create_device();
 int emit(struct libevdev_uinput *dev, int type, int code, int val);
