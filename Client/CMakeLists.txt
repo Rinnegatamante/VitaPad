@@ -4,18 +4,18 @@ set(PROJECT VitaPad)
 
 project(${PROJECT})
 
-if (LINUX)
+if (UNIX)
 
 add_executable(${PROJECT}
     main.c    
     uinput.c
 )
-
+include_directories(/usr/include/libevdev-1.0/ ${CMAKE_SOURCE_DIR}/../include)
 target_link_libraries(${PROJECT}
     evdev
 )
-endif (LINUX)
-if (WIN32)
+
+elseif (WIN32)
 
 add_custom_command(OUTPUT  vendor/lib/release/x64/ViGEmClient.lib
                    COMMAND vendor/build.ps1 -configuration Release_LIB|x64
@@ -30,4 +30,4 @@ add_executable(${PROJECT}
 )
 target_link_libraries(${PROJECT} ${CMAKE_SOURCE_DIR}/vendor/lib/release/x64/ViGEmClient.lib)
 
-endif (WIN32)
+endif (UNIX)
