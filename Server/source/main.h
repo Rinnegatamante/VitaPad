@@ -6,13 +6,13 @@
 
 typedef struct ThreadMessage
 {
-    SceUID msg_pipe;
-    SceUID ev_flag;
+    SceUID *msg_pipe;
+    SceUID *ev_flag;
 } ThreadMessage;
 
 typedef struct MainThreadMessage
 {
-    SceUID ev_flag_connect_state;
+    SceUID *ev_flag_connect_state;
 } MainThreadMessage;
 
 enum EVENT_FLAGS
