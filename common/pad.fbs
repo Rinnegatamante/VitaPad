@@ -1,0 +1,68 @@
+namespace Pad;
+
+struct ButtonsData
+{
+    select: bool;
+    start: bool;
+    up: bool;
+    right: bool;
+    down: bool;
+    left: bool;
+    lt: bool;
+    rt: bool;
+    triangle: bool;
+    circle: bool;
+    cross: bool;
+    square: bool;
+    // timestamp: ulong;
+}
+
+struct Vector3
+{
+    x: float;
+    y: float;
+    z: float;
+}
+
+struct MotionData
+{
+     gyro: Vector3;
+     accelerometer: Vector3;
+    // timestamp: ulong;
+}
+
+struct TouchReport
+{
+    pressure: ubyte;
+    id: ubyte;
+    x: short;
+    y: short;
+    // timestamp: ulong;
+}
+
+enum TouchPort : ubyte
+{
+    Front = 0,
+    Back = 1
+}
+
+table TouchData
+{
+    port: TouchPort;
+    reports: [TouchReport];
+    num_reports: ubyte;
+}
+
+table MainPacket
+{
+    Buttons: ButtonsData;
+    lx: ubyte;
+    ly: ubyte;
+    rx: ubyte;
+    ry: ubyte;
+    touch: [TouchData];
+    motion: MotionData;
+    timestamp: ulong;
+}
+
+root_type MainPacket;

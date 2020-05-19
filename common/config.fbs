@@ -1,0 +1,17 @@
+
+enum TouchConfig : ubyte
+{
+    Disabled = 0,
+    Front = 1,
+    Back = 2,
+    FrontBack = 3
+}
+
+table ConfigPacket
+{
+    touch_config: TouchConfig;
+    motion_activate: bool;
+    disconnect: bool;
+}
+
+root_type ConfigPacket;

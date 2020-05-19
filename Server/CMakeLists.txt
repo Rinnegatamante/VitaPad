@@ -14,26 +14,50 @@ project(VitaPad)
 include("${VITASDK}/share/vita.cmake" REQUIRED)
 set(VITA_APP_NAME "VitaPad")
 set(VITA_TITLEID  "VPAD00001")
-set(VITA_VERSION  "01.00")
+set(VITA_VERSION  "01.03")
 
 # Vita's IP to send over FTP
 set(VITA_IP  "192.168.1.34")
 
-
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
 set(VITA_MKSFOEX_FLAGS "${VITA_MKSFOEX_FLAGS} -d PARENTAL_LEVEL=1")
 
 link_directories(
   ${CMAKE_CURRENT_BINARY_DIR}
 )
+include_directories(
+   ${CMAKE_SOURCE_DIR}/../include
+)
+file(GLOB SRC_FLATBUFFERS 
+  ../common/*.fbs
+)
+
+foreach(FILE ${SRC_FLATBUFFERS})
+  get_filename_component(BASE_NAME ${FILE} NAME_WE)
+  set(FL_NAME " ${CMAKE_SOURCE_DIR}/../include/${BASE_NAME}.fbs.hpp")
+  list(APPEND FLATBUFFERS_OUT ${FL_NAME})
+  add_custom_command(OUTPUT ${FL_NAME}
+    COMMAND "flatc"
+    ARGS --cpp --scoped-enums 
+    ARGS --gen-mutable
+    ARGS --filename-suffix ".fbs" 
+    ARGS --filename-ext "hpp"
+    ARGS -o  ${CMAKE_SOURCE_DIR}/../include/
+    ARGS ${FILE}
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    DEPENDS ${FILE}
+  )
+endforeach()
 
 add_executable(${VITA_APP_NAME}
-  source/ctrl.c
-  source/main.c
+  src/ctrl.cpp
+  src/main.cpp
+  ${FLATBUFFERS_OUT}
 )
 
 target_link_libraries(${VITA_APP_NAME}
+  stdc++
   vita2d
   SceSysmodule_stub
   SceCtrl_stub
@@ -54,6 +78,7 @@ target_link_libraries(${VITA_APP_NAME}
   SceDisplay_stub
   SceMotion_stub
   debugnet
+  pthread
 )
 
 vita_create_self(${VITA_APP_NAME}.self ${VITA_APP_NAME})
@@ -67,6 +92,10 @@ vita_create_vpk(${VITA_APP_NAME}.vpk ${VITA_TITLEID} ${VITA_APP_NAME}.self
 )
 
 # Send the VPK directly to the PS Vita
-add_custom_target(ftp_send "ncftpput" -P 1337 ${VITA_IP} "ux0:data/" ${VITA_APP_NAME}.vpk
+
+add_custom_target(ftp_send "unzip" -o ${VITA_APP_NAME}.vpk -d ${VITA_APP_NAME}-extracted
+  COMMAND "curl" --ftp-method nocwd -T ${VITA_APP_NAME}-extracted/eboot.bin "ftp://${VITA_IP}:1337/ux0:/app/${VITA_TITLEID}/"
+  COMMAND "echo" destroy | nc ${VITA_IP} 1338
+  COMMAND "echo" launch ${VITA_TITLEID} | nc ${VITA_IP} 1338
   DEPENDS ${VITA_APP_NAME}.vpk
 )

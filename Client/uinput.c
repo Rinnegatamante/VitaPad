@@ -3,6 +3,9 @@
 #include "uinput.h"
 
 int err;
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 struct vita create_device()
 {
@@ -57,10 +60,8 @@ struct vita create_device()
     err = libevdev_uinput_create_from_device(dev,
                                              LIBEVDEV_UINPUT_OPEN_MANAGED,
                                              &uidev);
-                                             
 
     sleep(1);
-
 
     // Have to create another device because sensors can't be mixed with directional axes
     // and we can't assign the back touch surface along with the touchscreen.
@@ -75,22 +76,22 @@ struct vita create_device()
     libevdev_set_id_version(sensor_dev, 3);
     libevdev_enable_property(sensor_dev, INPUT_PROP_ACCELEROMETER);
 
-    // struct input_absinfo accel_abs_info = {}; //TODO: Query infos
-    // libevdev_enable_event_type(dev, EV_ABS);
-    // libevdev_enable_event_code(dev, EV_ABS, ABS_X, &accel_abs_info);
-    // libevdev_enable_event_code(dev, EV_ABS, ABS_Y, &accel_abs_info);
-    // libevdev_enable_event_code(dev, EV_ABS, ABS_Z, &accel_abs_info);
+    struct input_absinfo accel_abs_info = {.minimum = -1000, .maximum = 1000}; //TODO: Query infos
+    libevdev_enable_event_type(dev, EV_ABS);
+    libevdev_enable_event_code(dev, EV_ABS, ABS_X, &accel_abs_info);
+    libevdev_enable_event_code(dev, EV_ABS, ABS_Y, &accel_abs_info);
+    libevdev_enable_event_code(dev, EV_ABS, ABS_Z, &accel_abs_info);
 
-    // struct input_absinfo gyro_abs_info = {}; //TODO: Query infos
-    // libevdev_enable_event_code(dev, EV_ABS, ABS_RX, &gyro_abs_info);
-    // libevdev_enable_event_code(dev, EV_ABS, ABS_RY, &gyro_abs_info);
-    // libevdev_enable_event_code(dev, EV_ABS, ABS_RZ, &gyro_abs_info);
+    struct input_absinfo gyro_abs_info = {.minimum = -1000, .maximum = 1000}; //TODO: Query infos
+    libevdev_enable_event_code(dev, EV_ABS, ABS_RX, &gyro_abs_info);
+    libevdev_enable_event_code(dev, EV_ABS, ABS_RY, &gyro_abs_info);
+    libevdev_enable_event_code(dev, EV_ABS, ABS_RZ, &gyro_abs_info);
 
     struct input_absinfo mt_x_info = {.minimum = 0, .maximum = 1919};
     libevdev_enable_event_code(sensor_dev, EV_ABS, ABS_MT_POSITION_X, &mt_x_info);
     struct input_absinfo mt_y_info = {.minimum = 108, .maximum = 889};
     libevdev_enable_event_code(sensor_dev, EV_ABS, ABS_MT_POSITION_Y, &mt_y_info);
-    struct input_absinfo mt_id_info = {.minimum = 0, .maximum = 255}; //TODO: Query infos
+    struct input_absinfo mt_id_info = {.minimum = 0, .maximum = 255};
     libevdev_enable_event_code(sensor_dev, EV_ABS, ABS_MT_TRACKING_ID, &mt_id_info);
     struct input_absinfo mt_slot_info = {.minimum = 0, .maximum = 3}; // According to vitasdk docs
     libevdev_enable_event_code(sensor_dev, EV_ABS, ABS_MT_SLOT, &mt_slot_info);
@@ -113,9 +114,9 @@ struct vita create_device()
 
 int emit(struct libevdev_uinput *dev, int type, int code, int val)
 {
-    if ((err = libevdev_uinput_write_event(dev, type, code, val)) == -1)
+    if ((err = libevdev_uinput_write_event(dev, type, code, val)) < 0)
         return err;
-    if ((err = libevdev_uinput_write_event(dev, EV_SYN, SYN_REPORT, 0)) == -1)
+    if ((err = libevdev_uinput_write_event(dev, EV_SYN, SYN_REPORT, 0)) < 0)
         return err;
 
     return 0;
@@ -123,15 +124,15 @@ int emit(struct libevdev_uinput *dev, int type, int code, int val)
 
 int emit_touch(struct libevdev_uinput *dev, uint8_t slot, uint8_t id, int16_t x, int16_t y, uint8_t pressure)
 {
-    if ((err = libevdev_uinput_write_event(dev, EV_ABS, ABS_MT_SLOT, slot)) == -1)
+    if ((err = libevdev_uinput_write_event(dev, EV_ABS, ABS_MT_SLOT, slot)) < 0)
         return err;
-    if ((err = libevdev_uinput_write_event(dev, EV_ABS, ABS_MT_TRACKING_ID, id)) == -1)
+    if ((err = libevdev_uinput_write_event(dev, EV_ABS, ABS_MT_TRACKING_ID, id)) < 0)
         return err;
-    if ((err = libevdev_uinput_write_event(dev, EV_ABS, ABS_MT_POSITION_X, x)) == -1)
+    if ((err = libevdev_uinput_write_event(dev, EV_ABS, ABS_MT_POSITION_X, x)) < 0)
         return err;
-    if ((err = libevdev_uinput_write_event(dev, EV_ABS, ABS_MT_POSITION_Y, y)) == -1)
+    if ((err = libevdev_uinput_write_event(dev, EV_ABS, ABS_MT_POSITION_Y, y)) < 0)
         return err;
-    if ((err = libevdev_uinput_write_event(dev, EV_ABS, ABS_MT_PRESSURE, pressure)) == -1)
+    if ((err = libevdev_uinput_write_event(dev, EV_ABS, ABS_MT_PRESSURE, pressure)) < 0)
         return err;
 
     return 0;
@@ -139,10 +140,11 @@ int emit_touch(struct libevdev_uinput *dev, uint8_t slot, uint8_t id, int16_t x,
 
 int emit_touch_sync(struct libevdev_uinput *dev)
 {
-    if ((err = libevdev_uinput_write_event(dev, EV_SYN, SYN_REPORT, 0)) == -1)
-        return err;
-
-    return 0;
+    return libevdev_uinput_write_event(dev, EV_SYN, SYN_REPORT, 0);
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // __linux__
