@@ -59,7 +59,6 @@ Temporary Items
 
 **.o
 
-
 # =========================
 # Vita
 # =========================
@@ -71,3 +70,15 @@ Temporary Items
 **.bin
 Client/VitaPad
 
+# =========================
+# Windows Resources
+# =========================
+
+*.res
+
+# =========================
+# Prebuilt Binaries
+# =========================
+
+Client/VitaPad.exe
+Client/vJoyInterface.dll

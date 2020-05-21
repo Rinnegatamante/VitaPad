@@ -7,6 +7,7 @@ VitaPad allows you to use your PSVITA as a wireless PC controller. It supports W
 
 * Install VPK file on PSVITA
 * Open VitaPad on PSVITA
+* Optional: [Install vJoy driver](https://github.com/njz3/vJoy/releases/download/v2.2.0.0/vJoySetup.2.2.0.signed.exe) on Windows PC for vJoy functionality
 * Open VitaPad on PC
 * Insert the IP showed on PSVITA on PC
 
