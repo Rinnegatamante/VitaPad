@@ -23,13 +23,15 @@ ASFLAGS = $(CFLAGS)
 all: $(TARGET).vpk
 
 $(TARGET).vpk: $(TARGET).velf
-	vita-make-fself -s $< .\build\eboot.bin
+	vita-make-fself -s -c $< ./build/eboot.bin
 	vita-mksfoex -s TITLE_ID=$(TITLE) "$(TARGET)" param.sfo
 	cp -f param.sfo ./build/sce_sys/param.sfo
-	
-	#------------ Comment this if you don't have 7zip ------------------
-	7z a -tzip ./$(TARGET).vpk -r .\build\sce_sys\* .\build\eboot.bin 
-	#-------------------------------------------------------------------
+	vita-pack-vpk -s ./build/sce_sys/param.sfo -b ./build/eboot.bin \
+				  --add ./build/sce_sys/icon0.png=sce_sys/icon0.png \
+				  --add ./build/sce_sys/livearea/contents/bg.png=sce_sys/livearea/contents/bg.png \
+				  --add ./build/sce_sys/livearea/contents/startup.png=sce_sys/livearea/contents/startup.png \
+				  --add ./build/sce_sys/livearea/contents/template.xml=sce_sys/livearea/contents/template.xml \
+				  ./$(TARGET).vpk
 	
 %.velf: %.elf
 	$(PREFIX)-strip -g $<
