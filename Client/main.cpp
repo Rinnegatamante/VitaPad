@@ -522,8 +522,8 @@ int main(int argc,char** argv){
 	PadPacket data;
 	PadPacket olddata;
 	#ifdef __WIN32__
-	JOYSTICK_POSITION_V2 joystickData;
-	JOYSTICK_POSITION_V2 joystickDataOld;
+	JOYSTICK_POSITION_V3 joystickData;
+	JOYSTICK_POSITION_V3 joystickDataOld;
 	#endif
 
 	for (;;){
@@ -547,7 +547,7 @@ int main(int argc,char** argv){
 			firstScan = 0;
 			memcpy(&olddata,&data,sizeof(PadPacket));
 			#ifdef __WIN32__
-			memcpy(&joystickDataOld,&joystickData,sizeof(JOYSTICK_POSITION_V2));
+			memcpy(&joystickDataOld,&joystickData,sizeof(JOYSTICK_POSITION_V3));
 			#endif
 		}
 
@@ -644,7 +644,7 @@ int main(int argc,char** argv){
 				joystickData.wAxisX = data.lx*128;
 				joystickData.wAxisY = data.ly*128;
 				
-				if (0 != memcmp(&joystickDataOld, &joystickData, sizeof(JOYSTICK_POSITION_V2)))
+				if (0 != memcmp(&joystickDataOld, &joystickData, sizeof(JOYSTICK_POSITION_V3)))
 				{
 					PVOID pJoystickData = (PVOID)(&joystickData);
 					if (!UpdateVJD(VJOY_DEVID, pJoystickData))
@@ -653,7 +653,7 @@ int main(int argc,char** argv){
 						abortVjoy();
 					}
 					
-					memcpy(&joystickDataOld,&joystickData,sizeof(JOYSTICK_POSITION_V2));
+					memcpy(&joystickDataOld,&joystickData,sizeof(JOYSTICK_POSITION_V3));
 				}
 			}
 			if (!VJOY_MODE)
