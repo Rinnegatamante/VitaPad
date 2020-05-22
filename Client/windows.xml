@@ -1,5 +1,6 @@
 <!-- If you want to change mapping, look here: http://www.philipstorr.id.au/pcbook/book3/scancode.htm -->
 
+<VIGEM_MODE>0</VIGEM_MODE>
 <VJOY_MODE>0</VJOY_MODE>
 <VJOY_ALTERNATE>0</VJOY_ALTERNATE>
 <KEY_DOWN>0x1F</KEY_DOWN>

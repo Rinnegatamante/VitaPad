@@ -19,11 +19,31 @@ all: linux
     endif
 endif
 
-windows:
+ViGEmClient.o: ViGEmClient/src/ViGEmClient.cpp
+	g++ -c \
+		-static -static-libgcc -static-libstdc++ \
+		-I ViGEmClient/include \
+		-municode -DERROR_INVALID_DEVICE_OBJECT_PARAMETER=650L\
+		ViGEmClient/src/ViGEmClient.cpp
+
+tinyxml2.o: tinyxml2.cpp
+	g++ -c \
+		-static -static-libgcc -static-libstdc++ \
+		tinyxml2.cpp
+
+icon.res: icon.rc
 	windres icon.rc -O coff -o icon.res
-	g++ -static-libgcc -static-libstdc++ -o VitaPad main.cpp tinyxml2.cpp icon.res -I VJoySDK/inc $(VJOY_LIB_PATH)/vJoyInterface.lib -static -lpthread -lws2_32 -fpermissive
+
+vJoyInterface.dll: $(VJOY_LIB_PATH)/vJoyInterface.dll
 # use powershell to handle Linux-style file path, cmd will not work
 	powershell -Command Copy-Item -Path $(VJOY_LIB_PATH)/vJoyInterface.dll -Destination vJoyInterface.dll
 
-linux:
-	g++ -static-libgcc -static-libstdc++ -o VitaPad main.cpp tinyxml2.cpp -lX11 -lXtst -fpermissive
+windows: ViGEmClient.o tinyxml2.o icon.res vJoyInterface.dll
+	g++ -static -static-libgcc -static-libstdc++ \
+		-I VJoySDK/inc -I ViGEmClient/include \
+		-o VitaPad \
+		main.cpp ViGEm.cpp ViGEmClient.o tinyxml2.o icon.res \
+		 $(VJOY_LIB_PATH)/vJoyInterface.lib -lpthread -lws2_32 -lsetupapi
+
+linux: tinyxml2.o
+	g++ -static-libgcc -static-libstdc++ -o VitaPad main.cpp tinyxml2.o -lX11 -lXtst

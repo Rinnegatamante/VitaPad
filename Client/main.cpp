@@ -13,10 +13,6 @@
 #  error "Your target system is not yet supported by VitaPad"
 #endif
 
-// PSVITA related stuffs
-#define SCREEN_WIDTH 1920
-#define SCREEN_HEIGHT 1088
-
 // Sockets
 #ifdef __WIN32__
 # include <winsock2.h>
@@ -28,6 +24,7 @@
 #endif
 
 #include "tinyxml2.h"
+#include "main.h"
 
 // Input
 #if defined(__WIN32__) || defined(__CYGWIN__)
@@ -69,6 +66,9 @@ uint16_t KEY_LANALOG_RIGHT, KEY_RANALOG_UP, KEY_RANALOG_DOWN, KEY_RANALOG_LEFT, 
 bool VJOY_MODE = false;
 bool VJOY_ALTERNATE = false;
 int VJOY_DEVID = 0;
+
+#include "ViGEm.h"
+unsigned int VIGEM_MODE = VIGEM_DEVICE_NONE;
 
 enum {
 	VJOY_CTRL_SELECT     = 1 << 6,	//!< Select button.
@@ -214,16 +214,23 @@ void loadConfig(const char* path)
 #ifdef __WIN32__
 	k1 = doc.FirstChildElement("VJOY_MODE");
 	bool tmp_bool = 0;
-	if (0 != k1 && 0 == k1->QueryBoolText(&tmp_bool) && true == tmp_bool)
+	if (NULL != k1 && tinyxml2::XML_NO_ERROR == k1->QueryBoolText(&tmp_bool) && true == tmp_bool)
 	{
 		VJOY_MODE = true;
 	}
 	
 	k1 = doc.FirstChildElement("VJOY_ALTERNATE");
 	tmp_bool = 0;
-	if (0 != k1 && 0 == k1->QueryBoolText(&tmp_bool) && true == tmp_bool)
+	if (NULL != k1 && tinyxml2::XML_NO_ERROR == k1->QueryBoolText(&tmp_bool) && true == tmp_bool)
 	{
 		VJOY_ALTERNATE = true;
+	}
+
+	k1 = doc.FirstChildElement("VIGEM_MODE");
+	unsigned int tmp_int = 0;
+	if (NULL != k1 && tinyxml2::XML_NO_ERROR == k1->QueryUnsignedText(&tmp_int) && 0 != tmp_int)
+	{
+		VIGEM_MODE = tmp_int;
 	}
 #endif
 	
@@ -235,36 +242,6 @@ typedef struct{
 	u32 sock;
 	struct sockaddr_in addrTo;
 } Socket;
-
-enum {
-	SCE_CTRL_SELECT     = 0x000001,	//!< Select button.
-	SCE_CTRL_START      = 0x000008,	//!< Start button.
-	SCE_CTRL_UP         = 0x000010,	//!< Up D-Pad button.
-	SCE_CTRL_RIGHT      = 0x000020,	//!< Right D-Pad button.
-	SCE_CTRL_DOWN       = 0x000040,	//!< Down D-Pad button.
-	SCE_CTRL_LEFT       = 0x000080,	//!< Left D-Pad button.
-	SCE_CTRL_LTRIGGER   = 0x000100,	//!< Left trigger.
-	SCE_CTRL_RTRIGGER   = 0x000200,	//!< Right trigger.
-	SCE_CTRL_TRIANGLE   = 0x001000,	//!< Triangle button.
-	SCE_CTRL_CIRCLE     = 0x002000,	//!< Circle button.
-	SCE_CTRL_CROSS      = 0x004000,	//!< Cross button.
-	SCE_CTRL_SQUARE     = 0x008000	//!< Square button.
-};
-#define NO_INPUT 0
-#define MOUSE_MOV 0x01
-#define LEFT_CLICK 0x08
-#define RIGHT_CLICK 0x10
-
-typedef struct{
-	uint32_t buttons;
-	uint8_t lx;
-	uint8_t ly;
-	uint8_t rx;
-	uint8_t ry;
-	uint16_t tx;
-	uint16_t ty;
-	uint8_t click;
-} PadPacket;
 
 #if defined(__WIN32__) || defined(__CYGWIN__)
 void SendMoveMouse(int x, int y){
@@ -451,10 +428,47 @@ time_t getLastModifiedTime(const char *path) {
 	#endif
 }
 
+#ifdef __WIN32__
+void ControllerCleanup()
+{
+    if (VJOY_MODE)
+    {
+        abortVjoy();
+        VJOY_MODE = false;
+    }
+    else if (VIGEM_MODE == VIGEM_DEVICE_DS4)
+    {
+        vgDestroy();
+        VIGEM_MODE = VIGEM_DEVICE_NONE;
+    }
+}
+
+BOOL WINAPI HandlerRoutine(
+    _In_ DWORD dwCtrlType
+    )
+{
+   switch (dwCtrlType)
+   {
+       case CTRL_C_EVENT:
+       {
+            printf("\nQuitting...\n");
+            ControllerCleanup();
+			ExitProcess(0);
+            return TRUE;
+       }
+       default:
+       {
+            return FALSE;
+       }
+   }
+}
+#endif
 
 int main(int argc,char** argv){
 	
 	#ifdef __WIN32__
+    SetConsoleCtrlHandler(HandlerRoutine, TRUE);
+
 	WORD versionWanted = MAKEWORD(1, 1);
 	WSADATA wsaData;
 	WSAStartup(versionWanted, &wsaData);
@@ -478,11 +492,24 @@ int main(int argc,char** argv){
 	
 	printf("VitaPad Client by Rinnegatamante\n\n");
 	#ifdef __WIN32__
-	if (VJOY_MODE)
+	if (VJOY_MODE && (VIGEM_MODE != VIGEM_DEVICE_NONE))
 	{
-		printf("!!!STARTING IN VJOY MODE!!!\nEdit the config and restart the application to disable it\n");
-		initVjoy();
+        printf("!!!CONFLICTING!!!\nvJoy and ViGEm cannot be enabled at the same time.\nEdit the config and restart the application to disable at least one of them.\n");
 	}
+    else if (VJOY_MODE)
+    {
+        printf("!!!STARTING IN VJOY MODE!!!\nEdit the config and restart the application to disable it.\n");
+		initVjoy();
+    }
+    else if (VIGEM_MODE == VIGEM_DEVICE_DS4)
+    {
+        printf("!!!STARTING IN VIGEM MODE!!!\nEdit the config and restart the application to disable it.\n");
+        if (!vgInit())
+        {
+            printf("ERROR: An error occurred while initializing ViGEm. Reverting back to keybinds.\n");
+            VIGEM_MODE = VIGEM_DEVICE_NONE;
+        }
+    }
 	#endif
 	char host[32];
 	if (argc > 1){
@@ -646,19 +673,26 @@ int main(int argc,char** argv){
 				
 				if (0 != memcmp(&joystickDataOld, &joystickData, sizeof(JOYSTICK_POSITION_V3)))
 				{
-					PVOID pJoystickData = (PVOID)(&joystickData);
-					if (!UpdateVJD(VJOY_DEVID, pJoystickData))
+					if (!UpdateVJD(VJOY_DEVID, &joystickData))
 					{
-						printf("\nERROR: Feeding VJOY failed, please restart the app\n");
+						printf("\nERROR: Feeding VJOY failed, please restart the app.\n");
 						abortVjoy();
 					}
 					
 					memcpy(&joystickDataOld,&joystickData,sizeof(JOYSTICK_POSITION_V3));
 				}
 			}
-			if (!VJOY_MODE)
-			{
+            else if (VIGEM_MODE == VIGEM_DEVICE_DS4)
+            {
+                if (!vgSubmit(&data))
+                {
+                    printf("\nERROR: Feeding VIGEM failed, please restart the app.\n");
+					break;
+                }
+            }
+			else
 			#endif
+			{
 				// Down
 				if ((data.buttons & SCE_CTRL_DOWN) && (!(olddata.buttons & SCE_CTRL_DOWN))) SEND_BUTTON_PRESS(KEY_DOWN);
 				else if ((olddata.buttons & SCE_CTRL_DOWN) && (!(data.buttons & SCE_CTRL_DOWN))) SEND_BUTTON_RELEASE(KEY_DOWN);
@@ -735,10 +769,7 @@ int main(int argc,char** argv){
 					if ((data.click & RIGHT_CLICK) && (!(olddata.click & RIGHT_CLICK))) SEND_MOUSE_EVENT(MOUSE_RIGHT_DOWN);
 					else if ((olddata.click & RIGHT_CLICK) && (!(data.click & RIGHT_CLICK))) SEND_MOUSE_EVENT(MOUSE_RIGHT_UP);
 				}
-				
-			#ifdef __WIN32__
 			}
-			#endif
 			
 			// Saving old pad status
 			memcpy(&olddata,&data,sizeof(PadPacket));
@@ -747,6 +778,8 @@ int main(int argc,char** argv){
 
     #ifdef __linux__
     XCloseDisplay(display);
+    #elif defined(__WIN32__)
+    ControllerCleanup();
     #endif
 
 	return 1;
