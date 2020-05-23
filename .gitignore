@@ -75,5 +75,8 @@ Temporary Items
 **.sfo
 **.vpk
 **.bin
-Client/VitaPad
 
+# =========================
+# Flatbuffers headers
+# =========================
+**.fbs.**

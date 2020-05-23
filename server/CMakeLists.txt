@@ -27,7 +27,7 @@ link_directories(
   ${CMAKE_CURRENT_BINARY_DIR}
 )
 include_directories(
-   ${CMAKE_SOURCE_DIR}/../include
+  ../include
 )
 file(GLOB SRC_FLATBUFFERS 
   ../common/*.fbs

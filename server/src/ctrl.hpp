@@ -8,6 +8,6 @@
 #include <pad.fbs.hpp>
 
 Pad::ButtonsData convert_pad_data(SceCtrlData data);
-flatbuffers::Offset<Pad::TouchData> convert_touch_data(flatbuffers::FlatBufferBuilder &builder, SceTouchData data);
+flatbuffers::Offset<Pad::TouchData> convert_touch_data(flatbuffers::FlatBufferBuilder &builder, SceTouchData data, Pad::TouchPort port);
 
 #endif // __CTRL_H__

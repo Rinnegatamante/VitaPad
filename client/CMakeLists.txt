@@ -29,13 +29,12 @@ include_directories(
 )
 
 if (UNIX)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
 
 add_executable(${PROJECT}
-    main.cpp
-    ctrl.cpp
-    sock_data.cpp
-    uinput.c
+    src/main.cpp
+    src/ctrl.cpp
+    src/sock_data.cpp
+    src/uinput.c
     ${FLATBUFFERS_OUT}
 )
 include_directories(
@@ -51,8 +50,10 @@ add_custom_command(OUTPUT  vendor/lib/release/x64/ViGEmClient.lib
                    COMMAND vendor/build.ps1 -configuration Release_LIB|x64
                    WORKING_DIRECTORY vendor/)
 add_executable(${PROJECT}
-    main.cpp
-    vigem.c
+    src/main.cpp
+    src/ctrl.cpp
+    src/sock_data.cpp
+    src/vigem.c
     ${FLATBUFFERS_OUT}
 )
 target_link_libraries(${PROJECT} vendor/lib/release/x64/ViGEmClient.lib)

@@ -14,7 +14,7 @@
 #include <unistd.h>
 
 #include "ctrl.hpp"
-#include "sock_data.cpp"
+#include "sock_data.hpp"
 #elif defined _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
