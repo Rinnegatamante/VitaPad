@@ -142,20 +142,27 @@ int main(){
 		
 		vita2d_start_drawing();
 		vita2d_clear_screen();
-		vita2d_pgf_draw_text(debug_font, 2, 20, text_color, 1.0, "VitaPad v.1.2 by Rinnegatamante");
+		vita2d_pgf_draw_text(debug_font, 2, 20, text_color, 1.0, "VitaPad v.1.3 by Rinnegatamante");
 		vita2d_pgf_draw_textf(debug_font, 2, 60, text_color, 1.0, "Listening on:\nIP: %s\nPort: %d",vita_ip,GAMEPAD_PORT);
-		vita2d_pgf_draw_textf(debug_font, 2, 140, text_color, 1.0, "Mode: %s\nPress X to change mode",mode ? "Vita to PSTV" : "Vita to PC");
+		//vita2d_pgf_draw_textf(debug_font, 2, 140, text_color, 1.0, "Mode: %s\nPress X to change mode", mode ? "Vita to PSTV" : "Vita to PC");
 		vita2d_pgf_draw_textf(debug_font, 2, 200, text_color, 1.0, "Status: %s",connected ? "Connected!" : "Waiting connection...");
+		vita2d_pgf_draw_textf(debug_font, 2, 300, text_color, 1.0, "Thanks to MakiseKurisu & yuntiancherry for the ViGEm client support");
+		vita2d_pgf_draw_textf(debug_font, 2, 320, text_color, 1.0, "Thanks to Evengard for the vJoy client support");
+		vita2d_pgf_draw_textf(debug_font, 2, 340, text_color, 1.0, "Thanks to nyorem for the Linux client port");
+		vita2d_pgf_draw_textf(debug_font, 2, 380, text_color, 1.0, "Thanks to my distinguished Patroners for their awesome support:");
+		vita2d_pgf_draw_textf(debug_font, 2, 400, text_color, 1.0, "@Sarkies_Proxy - ArkSource - Freddy Parra");
+		vita2d_pgf_draw_textf(debug_font, 2, 420, text_color, 1.0, "RaveHeart - Tain Sueiras - drd7of14 - psymu");
+		vita2d_pgf_draw_textf(debug_font, 2, 440, text_color, 1.0, "The Vita3K project - nullobject - polytoad");
 		vita2d_end_drawing();
 		vita2d_wait_rendering_done();
 		vita2d_swap_buffers();
 		
-		if (!connected) {
+		/*if (!connected) {
 			SceCtrlData pad;
 			sceCtrlPeekBufferPositive(0, &pad, 1);
 			if ((pad.buttons & SCE_CTRL_CROSS) && (!(oldpad & SCE_CTRL_CROSS))) mode = (mode + 1) % 2;
 			oldpad = pad.buttons;
-		}
+		}*/
 		
 	}
 	
