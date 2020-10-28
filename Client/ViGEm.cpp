@@ -74,13 +74,21 @@ bool vgSubmit(pPadPacket packet)
     {
         report.wButtons = report.wButtons | DS4_BUTTON_SQUARE;
     }
-    if (packet->click & MOUSE_MOV && packet->tx < SCREEN_WIDTH / 2)
+    if (packet->click & MOUSE_MOV && packet->tx < SCREEN_WIDTH / 2 && packet->ty < SCREEN_HEIGHT / 2)
     {
         report.wButtons = report.wButtons | DS4_BUTTON_SHOULDER_LEFT;
     }
-    if (packet->click & MOUSE_MOV && packet->tx >= SCREEN_WIDTH / 2)
+    if (packet->click & MOUSE_MOV && packet->tx >= SCREEN_WIDTH / 2 && packet->ty < SCREEN_HEIGHT / 2)
     {
         report.wButtons = report.wButtons | DS4_BUTTON_SHOULDER_RIGHT;
+    }
+    if (packet->click & MOUSE_MOV && packet->tx < SCREEN_WIDTH / 2 && packet->ty >= SCREEN_HEIGHT / 2)
+    {
+        report.wButtons = report.wButtons | DS4_BUTTON_THUMB_LEFT;
+    }
+    if (packet->click & MOUSE_MOV && packet->tx >= SCREEN_WIDTH / 2 && packet->ty >= SCREEN_HEIGHT / 2)
+    {
+        report.wButtons = report.wButtons | DS4_BUTTON_THUMB_RIGHT;
     }
 
     if (packet->buttons & SCE_CTRL_UP) DS4_SET_DPAD(&report, DS4_BUTTON_DPAD_NORTH);
