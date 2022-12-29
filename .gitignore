@@ -80,3 +80,5 @@ Temporary Items
 # Flatbuffers headers
 # =========================
 **.fbs.**
+
+.cache

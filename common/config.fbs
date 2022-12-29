@@ -1,17 +1,9 @@
-
-enum TouchConfig : ubyte
-{
-    Disabled = 0,
-    Front = 1,
-    Back = 2,
-    FrontBack = 3
-}
+namespace NetProtocol.Config;
 
 table ConfigPacket
 {
-    touch_config: TouchConfig;
-    motion_activate: bool;
-    disconnect: bool;
+    /// Minimal interval in microseconds between sending packets (> 4500us)
+    polling_interval: ulong;
 }
 
 root_type ConfigPacket;

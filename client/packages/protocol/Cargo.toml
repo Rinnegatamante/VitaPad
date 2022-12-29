@@ -1,0 +1,8 @@
+[package]
+name = "protocol"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+flatbuffers_structs = { path = "../flatbuffers_structs" }
+vita_reports = { version = "0.1.0", path = "../vita_reports" }

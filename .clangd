@@ -1,0 +1,2 @@
+CompileFlags:
+  Add: ["-I/usr/local/vitasdk/arm-vita-eabi/include", "-I/usr/local/vitasdk/arm-vita-eabi/include/c++/10.3.0", "-I/usr/local/vitasdk/arm-vita-eabi/include/c++/10.3.0/arm-vita-eabi"]

@@ -40,27 +40,20 @@ struct TouchReport
     // timestamp: ulong;
 }
 
-enum TouchPort : ubyte
-{
-    Front = 0,
-    Back = 1
-}
-
 table TouchData
 {
-    port: TouchPort;
     reports: [TouchReport];
-    num_reports: ubyte;
 }
 
 table MainPacket
 {
-    Buttons: ButtonsData;
+    buttons: ButtonsData;
     lx: ubyte;
     ly: ubyte;
     rx: ubyte;
     ry: ubyte;
-    touch: [TouchData];
+    front_touch: TouchData;
+    back_touch: TouchData;
     motion: MotionData;
     timestamp: ulong;
 }

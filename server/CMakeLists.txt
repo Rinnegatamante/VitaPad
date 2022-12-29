@@ -1,5 +1,4 @@
-cmake_minimum_required(VERSION 2.8)
-
+cmake_minimum_required(VERSION 3.0)
 
 if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
   if(DEFINED ENV{VITASDK})
@@ -17,11 +16,21 @@ set(VITA_TITLEID  "VPAD00001")
 set(VITA_VERSION  "01.03")
 
 # Vita's IP to send over FTP
-set(VITA_IP  "192.168.1.34")
+if(DEFINED ENV{VITA_IP})
+  set(VITA_IP $ENV{VITA_IP})
+endif()
+
+if(DEFINED ENV{DEBUG_IP})
+  add_compile_definitions(DEBUG_IP="$ENV{DEBUG_IP}")
+endif()
+
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
 set(VITA_MKSFOEX_FLAGS "${VITA_MKSFOEX_FLAGS} -d PARENTAL_LEVEL=1")
+
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/../cmake/")
+include(BuildFlatBuffers)
 
 link_directories(
   ${CMAKE_CURRENT_BINARY_DIR}
@@ -29,32 +38,29 @@ link_directories(
 include_directories(
   ../include
 )
-file(GLOB SRC_FLATBUFFERS 
+file(GLOB SRC_FLATBUFFERS
   ../common/*.fbs
 )
 
-foreach(FILE ${SRC_FLATBUFFERS})
-  get_filename_component(BASE_NAME ${FILE} NAME_WE)
-  set(FL_NAME " ${CMAKE_SOURCE_DIR}/../include/${BASE_NAME}.fbs.hpp")
-  list(APPEND FLATBUFFERS_OUT ${FL_NAME})
-  add_custom_command(OUTPUT ${FL_NAME}
-    COMMAND "flatc"
-    ARGS --cpp --scoped-enums 
-    ARGS --gen-mutable
-    ARGS --filename-suffix ".fbs" 
-    ARGS --filename-ext "hpp"
-    ARGS -o  ${CMAKE_SOURCE_DIR}/../include/
-    ARGS ${FILE}
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    DEPENDS ${FILE}
-  )
-endforeach()
+build_flatbuffers("${SRC_FLATBUFFERS}"
+ ""
+ flatbuffers_target
+ ${CMAKE_CURRENT_LIST_DIR}
+ ${CMAKE_BINARY_DIR}/generated
+ ""
+ "")
+
+include_directories(${CMAKE_BINARY_DIR}/generated)
 
 add_executable(${VITA_APP_NAME}
   src/ctrl.cpp
   src/main.cpp
-  ${FLATBUFFERS_OUT}
+  src/net.cpp
 )
+
+target_compile_options(${VITA_APP_NAME} PRIVATE -Wall -Wextra -Wpedantic -Werror)
+
+add_dependencies(${VITA_APP_NAME} flatbuffers_target)
 
 target_link_libraries(${VITA_APP_NAME}
   stdc++
@@ -66,6 +72,7 @@ target_link_libraries(${VITA_APP_NAME}
   SceNet_stub
   SceNetCtl_stub
   SceAppUtil_stub
+  SceAppMgr_stub
   ScePgf_stub
   jpeg
   freetype
@@ -78,9 +85,9 @@ target_link_libraries(${VITA_APP_NAME}
   SceDisplay_stub
   SceMotion_stub
   debugnet
+  flatbuffers
   pthread
 )
-
 vita_create_self(${VITA_APP_NAME}.self ${VITA_APP_NAME})
 vita_create_vpk(${VITA_APP_NAME}.vpk ${VITA_TITLEID} ${VITA_APP_NAME}.self
   VERSION ${VITA_VERSION}
@@ -93,9 +100,12 @@ vita_create_vpk(${VITA_APP_NAME}.vpk ${VITA_TITLEID} ${VITA_APP_NAME}.self
 
 # Send the VPK directly to the PS Vita
 
-add_custom_target(ftp_send "unzip" -o ${VITA_APP_NAME}.vpk -d ${VITA_APP_NAME}-extracted
-  COMMAND "curl" --ftp-method nocwd -T ${VITA_APP_NAME}-extracted/eboot.bin "ftp://${VITA_IP}:1337/ux0:/app/${VITA_TITLEID}/"
-  COMMAND "echo" destroy | nc ${VITA_IP} 1338
-  COMMAND "echo" launch ${VITA_TITLEID} | nc ${VITA_IP} 1338
-  DEPENDS ${VITA_APP_NAME}.vpk
-)
+if (VITA_IP)
+  add_custom_target(ftp_send
+    "unzip" -o ${VITA_APP_NAME}.vpk -d ${VITA_APP_NAME}-extracted
+    COMMAND "curl" --ftp-method nocwd -T ${VITA_APP_NAME}-extracted/eboot.bin "ftp://${VITA_IP}:1337/ux0:/app/${VITA_TITLEID}/"
+    # COMMAND "echo" destroy | nc ${VITA_IP} 1338
+    # COMMAND "echo" launch ${VITA_TITLEID} | nc ${VITA_IP} 1338
+    DEPENDS ${VITA_APP_NAME}.vpk
+  )
+endif()
