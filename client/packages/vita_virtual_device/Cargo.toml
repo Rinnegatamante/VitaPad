@@ -12,5 +12,5 @@ vita_reports = { version = "0.1.0", path = "../vita_reports" }
 [target.'cfg(target_os = "linux")'.dependencies]
 input-linux = "0.5.0"
 
-[target."cfg(windows)".dependencies]
+[target.'cfg(windows)'.dependencies]
 vigem = "0.9.1"
