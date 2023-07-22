@@ -199,7 +199,7 @@ private:
   /**
    * @brief Time in microseconds between polling for data
    */
-  uint64_t polling_time_ = 4500;
+  uint64_t polling_time_ = MIN_POLLING_INTERVAL_MICROS;
 
   bool to_be_removed_ = false;
   State state_ = State::WaitingForHandshake;
