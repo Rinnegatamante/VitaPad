@@ -95,13 +95,6 @@ fn main() -> color_eyre::Result<()> {
 
     log::info!("Handshake response received from Vita");
 
-    conn.send_heartbeat();
-    pad_socket
-        .send_to(conn.retrieve_out_data().as_slice(), addr)
-        .wrap_err("Failed to send heartbeat to Vita")?;
-
-    log::info!("Heartbeat sent to Vita");
-
     conn.receive_data(&buf);
     let event = conn
         .events()
@@ -113,6 +106,13 @@ fn main() -> color_eyre::Result<()> {
     };
     let heartbeat_freq = handshake_response.heartbeat_freq;
     log::debug!("Heartbeat frequency: {}", heartbeat_freq);
+
+    conn.send_heartbeat();
+    pad_socket
+        .send_to(conn.retrieve_out_data().as_slice(), addr)
+        .wrap_err("Failed to send heartbeat to Vita")?;
+
+    log::info!("Opened port for data on {}", bound_port);
 
     let mut last_time = SystemTime::now();
 
@@ -155,19 +155,23 @@ fn main() -> color_eyre::Result<()> {
             .recv_from(&mut buf)
             .or_else(filter_udp_nonblocking_error)
             .wrap_err("Failed to receive data from Vita")?;
-        log::trace!("Received {len} bytes from Vita: {buf:?}");
+        log::debug!("Received {len} bytes from Vita");
 
         if len == 0 {
             continue;
         }
 
-        conn.receive_data(&buf[..len]);
+        let received_data = &buf[..len];
+
+        log::trace!("Received {len} bytes from Vita: {received_data:?}");
+
+        conn.receive_data(received_data);
 
         for event in conn.events() {
             log::debug!("Event received: {event:?}");
             if let protocol::events::Event::PadDataReceived { data } = event {
                 let report = vita_reports::MainReport::from(data);
-                log::debug!("Sending report to virtual device: {report:?}");
+                log::trace!("Sending report to virtual device: {report:?}");
                 device
                     .send_report(report)
                     .wrap_err("Failed to send report to virtual device")?;
