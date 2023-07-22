@@ -7,6 +7,8 @@ edition = "2021"
 argh = "0.1.9"
 color-eyre = "0.6.2"
 flatbuffers_structs = { version = "0.1.0", path = "../flatbuffers_structs" }
+log = "0.4.19"
+pretty_env_logger = "0.5.0"
 protocol = { version = "0.1.0", path = "../protocol" }
 vita_reports = { version = "0.1.0", path = "../vita_reports" }
 vita_virtual_device = { version = "0.1.0", path = "../vita_virtual_device" }

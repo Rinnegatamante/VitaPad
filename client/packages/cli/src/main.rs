@@ -20,6 +20,9 @@ struct Args {
     /// port to connect to
     /// (default: 5000)
     port: Option<u16>,
+    #[argh(option)]
+    /// polling rate
+    polling_rate: Option<u64>,
     /// IP address of the Vita to connect to
     #[argh(positional)]
     ip: String,
@@ -42,8 +45,11 @@ fn main() -> color_eyre::Result<()> {
     const POLLING_RATE: u64 = 1 * 1000 / 250;
 
     color_eyre::install()?;
+    pretty_env_logger::init();
+
     let args: Args = argh::from_env();
     let remote_port = args.port.unwrap_or(NET_PORT);
+    let polling_rate = args.polling_rate.unwrap_or(POLLING_RATE);
 
     let addr = SocketAddr::V4(SocketAddrV4::new(
         args.ip.parse().wrap_err("invalid IPv4 address")?,
@@ -51,8 +57,9 @@ fn main() -> color_eyre::Result<()> {
     ));
     let mut conn = Connection::new();
 
-    let mut ctrl_socket = TcpStream::connect_timeout(&addr, TIMEOUT)
-        .wrap_err("Failed to connect to Vita, please check that the IP address is correct")?;
+    let mut ctrl_socket = TcpStream::connect_timeout(&addr, TIMEOUT).wrap_err(
+        "Failed to connect to device, please check that the IP address and port are correct",
+    )?;
 
     let pad_socket =
         UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0)).wrap_err("Failed to bind UDP socket")?;
@@ -76,16 +83,24 @@ fn main() -> color_eyre::Result<()> {
         .write_all(conn.retrieve_out_data().as_slice())
         .wrap_err("Failed to send handshake to Vita")?;
 
+    log::info!("Handshake sent to Vita");
+
+    log::info!("Waiting for handshake response from Vita");
+
     let mut buf = [0; BUFFER_SIZE];
 
     ctrl_socket
         .read(&mut buf)
         .wrap_err("Failed to read handshake response from Vita")?;
 
+    log::info!("Handshake response received from Vita");
+
     conn.send_heartbeat();
     pad_socket
         .send_to(conn.retrieve_out_data().as_slice(), addr)
         .wrap_err("Failed to send heartbeat to Vita")?;
+
+    log::info!("Heartbeat sent to Vita");
 
     conn.receive_data(&buf);
     let event = conn
@@ -97,6 +112,7 @@ fn main() -> color_eyre::Result<()> {
         _ => unimplemented!("Unexpected event received"),
     };
     let heartbeat_freq = handshake_response.heartbeat_freq;
+    log::debug!("Heartbeat frequency: {}", heartbeat_freq);
 
     let mut last_time = SystemTime::now();
 
@@ -116,7 +132,8 @@ fn main() -> color_eyre::Result<()> {
     println!("Connection established, press Ctrl+C to exit");
 
     loop {
-        std::thread::sleep(Duration::from_micros(POLLING_RATE));
+        std::thread::sleep(Duration::from_millis(polling_rate));
+        log::trace!("Polling");
 
         if last_time
             .elapsed()
@@ -124,17 +141,21 @@ fn main() -> color_eyre::Result<()> {
             .as_secs()
             >= (heartbeat_freq - 5).into()
         {
+            log::debug!("Sending heartbeat to Vita");
             conn.send_heartbeat();
             ctrl_socket
                 .write_all(conn.retrieve_out_data().as_slice())
                 .wrap_err("Failed to send heartbeat to Vita")?;
+            log::debug!("Heartbeat sent to Vita");
             last_time = SystemTime::now();
+            log::trace!("Last time updated to {last_time:?}");
         }
 
         let (len, _) = pad_socket
             .recv_from(&mut buf)
             .or_else(filter_udp_nonblocking_error)
             .wrap_err("Failed to receive data from Vita")?;
+        log::trace!("Received {len} bytes from Vita: {buf:?}");
 
         if len == 0 {
             continue;
@@ -143,8 +164,10 @@ fn main() -> color_eyre::Result<()> {
         conn.receive_data(&buf[..len]);
 
         for event in conn.events() {
+            log::debug!("Event received: {event:?}");
             if let protocol::events::Event::PadDataReceived { data } = event {
                 let report = vita_reports::MainReport::from(data);
+                log::debug!("Sending report to virtual device: {report:?}");
                 device
                     .send_report(report)
                     .wrap_err("Failed to send report to virtual device")?;
