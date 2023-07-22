@@ -169,8 +169,8 @@ impl<F: AsRawFd> VitaDevice<F> {
         };
 
         let gyro_abs_info = AbsoluteInfo {
-            minimum: -16,
-            maximum: 16,
+            minimum: -1,
+            maximum: 1,
             ..Default::default()
         };
         let gyro_x_info = AbsoluteInfoSetup {
@@ -346,6 +346,8 @@ impl VitaVirtualDevice for VitaDevice<File> {
             };
         }
 
+        // Main device events
+
         let buttons_events: &[InputEvent] = &[
             key_event!(report, triangle, ButtonNorth),
             key_event!(report, circle, ButtonEast),
@@ -378,14 +380,18 @@ impl VitaVirtualDevice for VitaDevice<File> {
                 let new_id = report.front_touch.reports.get(slot).map(|r| r.id);
 
                 match (*id, new_id) {
-                    (Some(_), None) => Some(AbsoluteEvent::new(
-                        EVENT_TIME_ZERO,
-                        AbsoluteAxis::MultitouchTrackingId,
-                        -1,
-                    )),
+                    (Some(_), None) => Some([
+                        AbsoluteEvent::new(
+                            EVENT_TIME_ZERO,
+                            AbsoluteAxis::MultitouchSlot,
+                            slot as i32,
+                        ),
+                        AbsoluteEvent::new(EVENT_TIME_ZERO, AbsoluteAxis::MultitouchTrackingId, -1),
+                    ]),
                     _ => None,
                 }
             })
+            .flatten()
             .map(|ev| ev.into())
             .collect::<Vec<InputEvent>>();
 
@@ -439,6 +445,8 @@ impl VitaVirtualDevice for VitaDevice<File> {
             .write(&[syn_event])
             .map_err(Error::WriteEventFailed)?;
 
+        // Sensors device events
+
         let motion_events: &[InputEvent] = &[
             accel_event!(report, x, X),
             accel_event!(report, y, Y),
@@ -457,14 +465,18 @@ impl VitaVirtualDevice for VitaDevice<File> {
                 let new_id = report.back_touch.reports.get(slot).map(|r| r.id);
 
                 match (*id, new_id) {
-                    (Some(_), None) => Some(AbsoluteEvent::new(
-                        EVENT_TIME_ZERO,
-                        AbsoluteAxis::MultitouchTrackingId,
-                        -1,
-                    )),
+                    (Some(_), None) => Some([
+                        AbsoluteEvent::new(
+                            EVENT_TIME_ZERO,
+                            AbsoluteAxis::MultitouchSlot,
+                            slot as i32,
+                        ),
+                        AbsoluteEvent::new(EVENT_TIME_ZERO, AbsoluteAxis::MultitouchTrackingId, -1),
+                    ]),
                     _ => None,
                 }
             })
+            .flatten()
             .map(|ev| ev.into())
             .collect::<Vec<InputEvent>>();
 
