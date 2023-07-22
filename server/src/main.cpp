@@ -207,6 +207,10 @@ static int main_thread(__attribute__((unused)) unsigned int arglen,
           disconnect_client(client, message->ev_flag_connect_state);
         }
       } else if (ev.events & SCE_NET_EPOLLOUT) {
+        if (data->type == SocketType::SERVER) {
+          continue;
+        }
+
         auto client = data->client();
 
         switch (client->state()) {
@@ -214,7 +218,7 @@ static int main_thread(__attribute__((unused)) unsigned int arglen,
           try {
             net::send_handshake_response(*client, NET_PORT,
                                          MAX_HEARTBEAT_INTERVAL);
-            client->set_state(ClientData::State::Connected);
+            debugNetPrintf(DEBUG, "Sending handshake response\n");
 
             SceNetEpollEvent ev = {};
             ev.events = SCE_NET_EPOLLIN | SCE_NET_EPOLLHUP | SCE_NET_EPOLLERR;
@@ -258,11 +262,28 @@ static int main_thread(__attribute__((unused)) unsigned int arglen,
 
     clients_manager.remove_marked_clients();
 
-    if (std::none_of(clients.begin(), clients.end(), [](const auto &client) {
-          return client->state() == ClientData::State::Connected &&
-                 client->is_polling_time_elapsed();
-        }))
+    if (std::none_of(clients.begin(), clients.end(),
+                     [](const std::shared_ptr<ClientData> &client) {
+                       return client->state() == ClientData::State::Connected &&
+                              client->is_polling_time_elapsed();
+                     })) {
+#ifdef DEBUG_IP
+      for (auto &client : clients) {
+        auto client_addr = client->data_conn_info();
+        auto client_addr_in =
+            reinterpret_cast<SceNetSockaddrIn *>(&client_addr);
+        char ip[INET_ADDRSTRLEN];
+        sceNetInetNtop(SCE_NET_AF_INET,
+                       static_cast<void *>(&client_addr_in->sin_addr), ip,
+                       sizeof(ip));
+
+        debugNetPrintf(DEBUG, "Address: %s:%d, state: %d, last polling: %ld\n",
+                       ip, sceNetNtohs(client_addr_in->sin_port),
+                       client->state(), client->time_since_last_sent_data());
+      }
+#endif
       continue;
+    }
 
     sceKernelSetEventFlag(flag_ctrl_out, DATA_OUT);
 
@@ -276,6 +297,7 @@ static int main_thread(__attribute__((unused)) unsigned int arglen,
     for (auto &client : clients) {
       if (client->state() == ClientData::State::Connected &&
           client->is_polling_time_elapsed()) {
+        client->update_sent_data_time();
         auto client_addr = client->data_conn_info();
         auto addrlen = sizeof(client_addr);
 #ifdef DEBUG_IP
