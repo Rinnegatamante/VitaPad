@@ -255,8 +255,8 @@ class NetException : public std::exception {
 
 public:
   NetException(int error_code) : error_code_(error_code) {
-    snprintf(msg_, max_error_msg_size, "network error occured: %s",
-             sce_net_strerror((unsigned)error_code_));
+    snprintf(msg_, max_error_msg_size, "network error occured: %s (%d)",
+             sce_net_strerror((unsigned)error_code_), error_code_);
   }
   const char *what() const noexcept override { return msg_; }
   int error_code() const noexcept { return error_code_; }

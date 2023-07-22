@@ -43,7 +43,6 @@ void net::handle_ingoing_data(ClientData &client) {
   case ClientData::State::Connected:
     handlers.insert(handlers.end(), {
                                         &ClientData::handle_heartbeat,
-                                        &ClientData::handle_handshake,
                                         &ClientData::handle_config,
                                     });
     break;
@@ -80,4 +79,6 @@ void net::send_handshake_response(ClientData &client, uint16_t port,
   if (sent <= 0) {
     throw NetException(sent);
   }
+
+  client.set_state(ClientData::State::Connected);
 }
