@@ -266,10 +266,7 @@ private:
   char msg_[max_error_msg_size];
 };
 
-bool handle_handshake(ClientData &client);
-
-bool handle_heartbeat(ClientData &client);
-
+void handle_ingoing_data(ClientData &client);
 void send_handshake_response(ClientData &client, uint16_t port,
                              uint32_t heartbeat_interval);
 } // namespace net

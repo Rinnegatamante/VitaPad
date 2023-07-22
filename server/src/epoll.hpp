@@ -13,42 +13,57 @@
 
 #include "heartbeat.hpp"
 #define FLATBUFFERS_TRACK_VERIFIER_BUFFER_SIZE
+#include <config_generated.h>
 #include <handshake_generated.h>
+
+constexpr unsigned int MIN_POLLING_INTERVAL_MICROS = (1 * 1000 / 250) * 1000;
 
 class TimeHelper {
 public:
-  TimeHelper() : last_time_() {
-    SceDateTime current_time;
-    sceRtcGetCurrentClockLocalTime(&current_time);
-    sceRtcConvertDateTimeToTime64_t(&current_time, &last_time_);
-  }
+  TimeHelper() : last_time() { sceRtcGetCurrentClockLocalTime(&last_time); }
 
-  uint64_t last_time() const { return last_time_; }
-
-  void update() {
-    SceDateTime current_time;
-    sceRtcGetCurrentClockLocalTime(&current_time);
-    sceRtcConvertDateTimeToTime64_t(&current_time, &last_time_);
-  }
+  void update() { sceRtcGetCurrentClockLocalTime(&last_time); }
 
   uint64_t elapsed_time_secs() const {
     SceDateTime current_time;
-    uint64_t current_time64;
-    sceRtcGetCurrentClockLocalTime(&current_time);
-    sceRtcConvertDateTimeToTime64_t(&current_time, &current_time64);
+    uint64_t current_time_secs;
+    uint64_t last_time_secs;
 
-    return current_time64 - last_time_;
+    sceRtcGetCurrentClockLocalTime(&current_time);
+    sceRtcConvertDateTimeToTime64_t(&current_time, &current_time_secs);
+    sceRtcConvertDateTimeToTime64_t(&last_time, &last_time_secs);
+
+    return current_time_secs - last_time_secs;
+  }
+
+  uint64_t elapsed_time_micros() const {
+    constexpr uint64_t MICROSECONDS_IN_SECOND = 1E6;
+
+    SceDateTime current_time;
+    uint64_t current_time_secs;
+    uint64_t last_time_secs;
+
+    sceRtcGetCurrentClockLocalTime(&current_time);
+    sceRtcConvertDateTimeToTime64_t(&current_time, &current_time_secs);
+    sceRtcConvertDateTimeToTime64_t(&last_time, &last_time_secs);
+
+    uint64_t current_micros = current_time_secs * MICROSECONDS_IN_SECOND +
+                              sceRtcGetMicrosecond(&current_time);
+    uint64_t last_micros = last_time_secs * MICROSECONDS_IN_SECOND +
+                           sceRtcGetMicrosecond(&last_time);
+
+    return current_micros - last_micros;
   }
 
 private:
-  SceUInt64 last_time_;
+  SceDateTime last_time;
 };
 
 class EpollSocket {
 public:
   EpollSocket(int sock_fd, SceUID epoll) : fd_(sock_fd), epoll_(epoll) {}
   ~EpollSocket() {
-    sceNetEpollControl(epoll_, SCE_NET_EPOLL_CTL_DEL, fd_, NULL);
+    sceNetEpollControl(epoll_, SCE_NET_EPOLL_CTL_DEL, fd_, nullptr);
     sceNetSocketClose(fd_);
   }
   int fd() const { return fd_; }
@@ -82,15 +97,26 @@ public:
   State state() const { return state_; }
   void set_state(State state) { state_ = state; }
 
+  /**
+   * @brief Returns time in seconds since last heartbeat
+   */
   uint64_t time_since_last_heartbeat() const {
-    return time_helper_.elapsed_time_secs();
+    return heartbeat_time_helper_.elapsed_time_secs();
   }
-  void update_heartbeat_time() { time_helper_.update(); }
+  void update_heartbeat_time() { heartbeat_time_helper_.update(); }
+
+  /**
+   * @brief Returns time in microseconds since last sent data
+   */
+  uint64_t time_since_last_sent_data() const {
+    return sent_data_time_helper_.elapsed_time_micros();
+  }
+  void update_sent_data_time() { sent_data_time_helper_.update(); }
+  bool is_polling_time_elapsed() const {
+    return time_since_last_sent_data() > polling_time_;
+  }
 
   void add_to_buffer(uint8_t const *data, size_t size) {
-    if (size > MAX_BUFFER_ACCEPTABLE_SIZE)
-      throw ClientDataException("Buffer size exceeded");
-
     buffer_.insert(buffer_.end(), data, data + size);
 
     if (buffer_.size() > MAX_BUFFER_ACCEPTABLE_SIZE) {
@@ -99,8 +125,7 @@ public:
     }
   }
 
-  bool with_handshake_callback(
-      std::function<void(NetProtocol::Handshake::Handshake const &)> callback) {
+  bool handle_handshake() {
     flatbuffers::Verifier verifier(buffer_.data(), buffer_.size());
 
     if (!NetProtocol::Handshake::VerifySizePrefixedHandshakeBuffer(verifier))
@@ -109,21 +134,45 @@ public:
     auto handshake =
         NetProtocol::Handshake::GetSizePrefixedHandshake(buffer_.data());
 
-    callback(*handshake);
+    SceNetSockaddrIn clientaddr;
+    unsigned int addrlen = sizeof(clientaddr);
+    sceNetGetpeername(
+        ctrl_fd(), reinterpret_cast<SceNetSockaddr *>(&clientaddr), &addrlen);
+    clientaddr.sin_port = sceNetHtons(handshake->port());
+
+    auto addr = reinterpret_cast<SceNetSockaddr *>(&clientaddr);
+    set_data_conn_info(*addr);
+    set_state(ClientData::State::WaitingForServerConfirm);
 
     auto size = verifier.GetComputedSize();
     buffer_.erase(buffer_.begin(), buffer_.begin() + size);
     return true;
   }
 
-  /**
-   * R
-   */
-  bool retrieve_heartbeat_buffer() {
+  bool handle_config() {
+    flatbuffers::Verifier verifier(buffer_.data(), buffer_.size());
+
+    if (!NetProtocol::Config::VerifySizePrefixedConfigPacketBuffer(verifier))
+      return false;
+
+    auto config =
+        NetProtocol::Config::GetSizePrefixedConfigPacket(buffer_.data());
+
+    if (config->polling_interval() > MIN_POLLING_INTERVAL_MICROS)
+      polling_time_ = config->polling_interval();
+
+    auto size = verifier.GetComputedSize();
+    buffer_.erase(buffer_.begin(), buffer_.begin() + size);
+    return true;
+  }
+
+  bool handle_heartbeat() {
     if (buffer_.size() < heartbeat_magic.size() ||
         !std::equal(heartbeat_magic.begin(), heartbeat_magic.end(),
                     buffer_.begin()))
       return false;
+
+    update_heartbeat_time();
 
     auto size = heartbeat_magic.size();
     buffer_.erase(buffer_.begin(), buffer_.begin() + size);
@@ -145,7 +194,13 @@ public:
 
 private:
   EpollSocket sock_;
-  TimeHelper time_helper_;
+  TimeHelper heartbeat_time_helper_;
+  TimeHelper sent_data_time_helper_;
+  /**
+   * @brief Time in microseconds between polling for data
+   */
+  uint64_t polling_time_ = 4500;
+
   bool to_be_removed_ = false;
   State state_ = State::WaitingForHandshake;
   std::vector<uint8_t> buffer_;

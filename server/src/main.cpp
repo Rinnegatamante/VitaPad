@@ -22,12 +22,11 @@
 #include <debugnet.h>
 #else
 #define debugNetPrintf(...)
+constexpr size_t NET_INIT_SIZE = 1 * 1024 * 1024;
 #endif
 
-constexpr size_t NET_INIT_SIZE = 1 * 1024 * 1024;
 constexpr size_t MAX_EPOLL_EVENTS = 10;
-constexpr time_t MAX_INTERVAL = (1 * 1000 / 250);
-constexpr time_t MAX_HEARTBEAT_INTERVAL = 120;
+constexpr time_t MAX_HEARTBEAT_INTERVAL = 60;
 
 typedef struct _MainThreadMessage {
   SceUID ev_flag_connect_state;
@@ -58,8 +57,7 @@ static int control_thread(__attribute__((unused)) unsigned int arglen,
                           void *argp) {
   assert(arglen == sizeof(ControlThreadMessage));
 
-  ControlThreadMessage *message =
-      reinterpret_cast<ControlThreadMessage *>(argp);
+  ControlThreadMessage *message = static_cast<ControlThreadMessage *>(argp);
   SceCtrlData pad;
   SceMotionSensorState motion_data; // TODO: Needs calibration
   SceTouchData touch_data_front, touch_data_back;
@@ -104,11 +102,37 @@ static int control_thread(__attribute__((unused)) unsigned int arglen,
   return 0;
 }
 
+void add_client(int server_tcp_fd, SceUID epoll,
+                ClientsManager &clients_manager, SceUID ev_flag_connect_state) {
+  SceNetSockaddrIn clientaddr;
+  unsigned int addrlen = sizeof(clientaddr);
+  int client_fd =
+      sceNetAccept(server_tcp_fd, (SceNetSockaddr *)&clientaddr, &addrlen);
+  if (client_fd >= 0) {
+    auto client_data = std::make_shared<ClientData>(client_fd, epoll);
+    clients_manager.add_client(client_data);
+    auto member_ptr = std::make_unique<EpollMember>(client_data);
+    client_data->set_member_ptr(std::move(member_ptr));
+
+    SceNetEpollEvent ev = {};
+    ev.events = SCE_NET_EPOLLIN | SCE_NET_EPOLLOUT | SCE_NET_EPOLLHUP |
+                SCE_NET_EPOLLERR;
+    ev.data.ptr = client_data->member_ptr().get();
+    auto nbio = 1;
+    sceNetSetsockopt(client_data->ctrl_fd(), SCE_NET_SOL_SOCKET,
+                     SCE_NET_SO_NBIO, &nbio, sizeof(nbio));
+
+    sceNetEpollControl(epoll, SCE_NET_EPOLL_CTL_ADD, client_data->ctrl_fd(),
+                       &ev);
+    sceKernelSetEventFlag(ev_flag_connect_state, CONNECT);
+  }
+}
+
 static int main_thread(__attribute__((unused)) unsigned int arglen,
                        void *argp) {
   assert(arglen == sizeof(MainThreadMessage));
 
-  MainThreadMessage *message = reinterpret_cast<MainThreadMessage *>(argp);
+  MainThreadMessage *message = static_cast<MainThreadMessage *>(argp);
 
   // Create the thread which manages the control part
   auto flag_ctrl_out = sceKernelCreateEventFlag("flag_ctrl", 0, 0, NULL);
@@ -133,7 +157,7 @@ static int main_thread(__attribute__((unused)) unsigned int arglen,
   auto nbio = 1;
   sceNetSetsockopt(server_tcp_fd, SCE_NET_SOL_SOCKET, SCE_NET_SO_NBIO, &nbio,
                    sizeof(nbio));
-  sceNetListen(server_tcp_fd, 8);
+  sceNetListen(server_tcp_fd, 2);
 
   auto server_udp_fd =
       sceNetSocket("SERVER_UDP_SOCKET", SCE_NET_AF_INET, SCE_NET_SOCK_DGRAM, 0);
@@ -151,8 +175,8 @@ static int main_thread(__attribute__((unused)) unsigned int arglen,
   SceNetEpollEvent events[MAX_EPOLL_EVENTS];
   int n;
 
-  while ((n = sceNetEpollWait(epoll, events, MAX_EPOLL_EVENTS, MAX_INTERVAL)) >=
-         0) {
+  while ((n = sceNetEpollWait(epoll, events, MAX_EPOLL_EVENTS,
+                              MIN_POLLING_INTERVAL_MICROS)) >= 0) {
     for (size_t i = 0; i < (unsigned)n; i++) {
       auto ev = events[i];
       EpollMember *data = static_cast<EpollMember *>(ev.data.ptr);
@@ -164,76 +188,25 @@ static int main_thread(__attribute__((unused)) unsigned int arglen,
         }
       } else if (ev.events & SCE_NET_EPOLLIN) {
         if (data->type == SocketType::SERVER) {
-          SceNetSockaddrIn clientaddr;
-          unsigned int addrlen = sizeof(clientaddr);
-          int client_fd = sceNetAccept(server_tcp_fd,
-                                       (SceNetSockaddr *)&clientaddr, &addrlen);
-          if (client_fd >= 0) {
-            auto client_data = std::make_shared<ClientData>(client_fd, epoll);
-            clients_manager.add_client(client_data);
-            auto member_ptr = std::make_unique<EpollMember>(client_data);
-            client_data->set_member_ptr(std::move(member_ptr));
-
-            SceNetEpollEvent ev = {};
-            ev.events = SCE_NET_EPOLLIN | SCE_NET_EPOLLOUT | SCE_NET_EPOLLHUP |
-                        SCE_NET_EPOLLERR;
-            ev.data.ptr = client_data->member_ptr().get();
-            auto nbio = 1;
-            sceNetSetsockopt(client_data->ctrl_fd(), SCE_NET_SOL_SOCKET,
-                             SCE_NET_SO_NBIO, &nbio, sizeof(nbio));
-
-            sceNetEpollControl(epoll, SCE_NET_EPOLL_CTL_ADD,
-                               client_data->ctrl_fd(), &ev);
-            sceKernelSetEventFlag(message->ev_flag_connect_state, CONNECT);
-          }
-        } else {
-          auto client = data->client();
-
-          switch (client->state()) {
-          case ClientData::State::WaitingForHandshake: {
-            debugNetPrintf(DEBUG, "Waiting for handshake\n");
-            try {
-              net::handle_handshake(*client);
-            } catch (const net::NetException &e) {
-              debugNetPrintf(ERROR, "Network exception: %s\n", e.what());
-              if (e.error_code() == SCE_NET_ECONNRESET || e.error_code() == 0) {
-                disconnect_client(client, message->ev_flag_connect_state);
-              }
-            } catch (const std::exception &e) {
-              debugNetPrintf(ERROR, "Exception: %s\n", e.what());
-              disconnect_client(client, message->ev_flag_connect_state);
-            }
-            break;
-          }
-
-          case ClientData::State::Connected: {
-            try {
-              debugNetPrintf(DEBUG, "Checking heartbeat\n");
-              if (net::handle_heartbeat(*client)) {
-                client->update_heartbeat_time();
-                debugNetPrintf(DEBUG, "Heartbeat OK\n");
-              }
-            } catch (const net::NetException &e) {
-              debugNetPrintf(ERROR, "Network exception: %s\n", e.what());
-              if (e.error_code() == SCE_NET_ECONNRESET || e.error_code() == 0) {
-                disconnect_client(client, message->ev_flag_connect_state);
-              }
-            } catch (const std::exception &e) {
-              debugNetPrintf(ERROR, "Exception: %s\n", e.what());
-              disconnect_client(client, message->ev_flag_connect_state);
-            }
-            break;
-          }
-
-          default:
-            break;
-          }
+          add_client(server_tcp_fd, epoll, clients_manager,
+                     message->ev_flag_connect_state);
+          continue;
         }
 
-        // TODO: Handle config packets
-      }
-
-      else if (ev.events & SCE_NET_EPOLLOUT) {
+        auto client = data->client();
+        try {
+          debugNetPrintf(DEBUG, "Handling ingoing data\n");
+          net::handle_ingoing_data(*client);
+        } catch (const net::NetException &e) {
+          debugNetPrintf(ERROR, "Network exception: %s\n", e.what());
+          if (e.error_code() == SCE_NET_ECONNRESET || e.error_code() == 0) {
+            disconnect_client(client, message->ev_flag_connect_state);
+          }
+        } catch (const std::exception &e) {
+          debugNetPrintf(ERROR, "Exception: %s\n", e.what());
+          disconnect_client(client, message->ev_flag_connect_state);
+        }
+      } else if (ev.events & SCE_NET_EPOLLOUT) {
         auto client = data->client();
 
         switch (client->state()) {
@@ -286,7 +259,8 @@ static int main_thread(__attribute__((unused)) unsigned int arglen,
     clients_manager.remove_marked_clients();
 
     if (std::none_of(clients.begin(), clients.end(), [](const auto &client) {
-          return client->state() == ClientData::State::Connected;
+          return client->state() == ClientData::State::Connected &&
+                 client->is_polling_time_elapsed();
         }))
       continue;
 
@@ -300,7 +274,8 @@ static int main_thread(__attribute__((unused)) unsigned int arglen,
     sceKernelReceiveMsgPipe(ctrl_msg_pipe, buffer, buffer_size, 0, NULL, NULL);
 
     for (auto &client : clients) {
-      if (client->state() == ClientData::State::Connected) {
+      if (client->state() == ClientData::State::Connected &&
+          client->is_polling_time_elapsed()) {
         auto client_addr = client->data_conn_info();
         auto addrlen = sizeof(client_addr);
 #ifdef DEBUG_IP
@@ -371,8 +346,8 @@ int main() {
 
   SceUID ev_connect = sceKernelCreateEventFlag("ev_con", 0, 0, NULL);
   MainThreadMessage main_message = {ev_connect};
-  // Open the main thread with an event flag in argument to write the connection
-  // state
+  // Open the main thread with an event flag in argument to write the
+  // connection state
   SceUID main_thread_id = sceKernelCreateThread(
       "MainThread", &main_thread, 0x10000100, 0x10000, 0, 0, NULL);
   sceKernelStartThread(main_thread_id, sizeof(main_message), &main_message);

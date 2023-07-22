@@ -14,7 +14,6 @@ struct ButtonsData
     circle: bool;
     cross: bool;
     square: bool;
-    // timestamp: ulong;
 }
 
 struct Vector3
@@ -28,7 +27,6 @@ struct MotionData
 {
      gyro: Vector3;
      accelerometer: Vector3;
-    // timestamp: ulong;
 }
 
 struct TouchReport

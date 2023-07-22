@@ -72,7 +72,11 @@ target_link_libraries(${VITA_APP_NAME}
   SceNet_stub
   SceNetCtl_stub
   SceAppUtil_stub
+  # SceDriverUser_stub
+  SceDisplay_stub
+  SceMotion_stub
   SceAppMgr_stub
+  #
   ScePgf_stub
   jpeg
   freetype
@@ -82,8 +86,6 @@ target_link_libraries(${VITA_APP_NAME}
   png16
   z
   SceGxm_stub
-  SceDisplay_stub
-  SceMotion_stub
   debugnet
   flatbuffers
   pthread

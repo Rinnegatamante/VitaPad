@@ -16,31 +16,45 @@ int send_all(int fd, const void *buf, unsigned int size) {
   return bytes_sent;
 }
 
-bool net::handle_handshake(ClientData &client) {
-  constexpr size_t buffer_size = 64;
+void net::handle_ingoing_data(ClientData &client) {
+  constexpr size_t buffer_size = 1024;
+  typedef bool (ClientData::*buffer_handler)(void);
 
   uint8_t buffer[buffer_size];
   int received;
   while ((received = sceNetRecv(client.ctrl_fd(), buffer, buffer_size, 0)) >
          0) {
     client.add_to_buffer(buffer, received);
-
-    auto has_run = client.with_handshake_callback([&](auto &handshake) {
-      SceNetSockaddrIn clientaddr;
-      unsigned int addrlen = sizeof(clientaddr);
-      sceNetGetpeername(client.ctrl_fd(),
-                        reinterpret_cast<SceNetSockaddr *>(&clientaddr),
-                        &addrlen);
-      clientaddr.sin_port = sceNetHtons(handshake.port());
-
-      auto addr = reinterpret_cast<SceNetSockaddr *>(&clientaddr);
-      client.set_data_conn_info(*addr);
-      client.set_state(ClientData::State::WaitingForServerConfirm);
-    });
-
-    if (has_run)
-      return true;
   }
+
+  // TODO: refactor this
+
+  std::vector<buffer_handler> handlers;
+  switch (client.state()) {
+  case ClientData::State::WaitingForHandshake:
+    handlers.insert(handlers.end(), {&ClientData::handle_heartbeat,
+                                     &ClientData::handle_handshake});
+    break;
+  case ClientData::State::WaitingForServerConfirm:
+    handlers.insert(handlers.end(), {
+                                        &ClientData::handle_heartbeat,
+                                    });
+    break;
+  case ClientData::State::Connected:
+    handlers.insert(handlers.end(), {
+                                        &ClientData::handle_heartbeat,
+                                        &ClientData::handle_handshake,
+                                        &ClientData::handle_config,
+                                    });
+    break;
+  default:
+    break;
+  }
+
+  while (std::any_of(
+      std::begin(handlers), std::end(handlers),
+      [&](buffer_handler handler) { return std::invoke(handler, client); }))
+    ;
 
   if (received <= 0) {
     switch ((unsigned)received) {
@@ -50,35 +64,6 @@ bool net::handle_handshake(ClientData &client) {
       throw NetException(received);
     }
   }
-
-  return false;
-}
-
-bool net::handle_heartbeat(ClientData &client) {
-  constexpr size_t buffer_size = sizeof(heartbeat_magic);
-
-  uint8_t buffer[buffer_size];
-  int received;
-
-  while ((received = sceNetRecv(client.ctrl_fd(), buffer, buffer_size, 0)) >
-         0) {
-    client.add_to_buffer(buffer, received);
-    auto heartbeat_opt = client.retrieve_heartbeat_buffer();
-    if (heartbeat_opt) {
-      return true;
-    }
-  }
-
-  if (received <= 0) {
-    switch ((unsigned)received) {
-    case SCE_NET_ERROR_EWOULDBLOCK:
-      break;
-    default:
-      throw NetException(received);
-    }
-  }
-
-  return false;
 }
 
 void net::send_handshake_response(ClientData &client, uint16_t port,
