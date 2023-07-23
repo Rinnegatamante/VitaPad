@@ -14,6 +14,7 @@ The server has to be installed on the PS Vita and the client on the PC.
 
 - [VitaSDK](https://vitasdk.org/)
 - [CMake](https://cmake.org/)
+- [flatc](https://google.github.io/flatbuffers/flatbuffers_guide_using_schema_compiler.html)
 
 #### Windows
 
