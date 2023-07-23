@@ -48,7 +48,6 @@ impl Connection {
     }
 
     pub fn receive_data(&mut self, data: &[u8]) {
-        dbg!(data.len());
         self.incoming_buffer.extend_from_slice(data);
     }
 
