@@ -1,0 +1,23 @@
+name: Build and test
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  client:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Check, test and build
+        run: |
+          cd client
+          cargo check --all-targets
+          cargo test --all-targets
+          cargo build --release
