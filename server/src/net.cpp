@@ -2,7 +2,7 @@
 
 int send_all(int fd, const void *buf, unsigned int size) {
   const char *buf_ptr = static_cast<const char *>(buf);
-  int bytes_sent;
+  int bytes_sent = 0;
 
   while (size > 0) {
     bytes_sent = sceNetSend(fd, buf_ptr, size, 0);
@@ -18,7 +18,6 @@ int send_all(int fd, const void *buf, unsigned int size) {
 
 void net::handle_ingoing_data(ClientData &client) {
   constexpr size_t buffer_size = 1024;
-  typedef bool (ClientData::*buffer_handler)(void);
 
   uint8_t buffer[buffer_size];
   int received;
@@ -27,33 +26,8 @@ void net::handle_ingoing_data(ClientData &client) {
     client.add_to_buffer(buffer, received);
   }
 
-  // TODO: refactor this
-
-  std::vector<buffer_handler> handlers;
-  switch (client.state()) {
-  case ClientData::State::WaitingForHandshake:
-    handlers.insert(handlers.end(), {&ClientData::handle_heartbeat,
-                                     &ClientData::handle_handshake});
-    break;
-  case ClientData::State::WaitingForServerConfirm:
-    handlers.insert(handlers.end(), {
-                                        &ClientData::handle_heartbeat,
-                                    });
-    break;
-  case ClientData::State::Connected:
-    handlers.insert(handlers.end(), {
-                                        &ClientData::handle_heartbeat,
-                                        &ClientData::handle_config,
-                                    });
-    break;
-  default:
-    break;
+  while (client.handle_heartbeat() || client.handle_data()) {
   }
-
-  while (std::any_of(
-      std::begin(handlers), std::end(handlers),
-      [&](buffer_handler handler) { return std::invoke(handler, client); }))
-    ;
 
   if (received <= 0) {
     switch ((unsigned)received) {
@@ -68,10 +42,12 @@ void net::handle_ingoing_data(ClientData &client) {
 void net::send_handshake_response(ClientData &client, uint16_t port,
                                   uint32_t heartbeat_interval) {
   flatbuffers::FlatBufferBuilder builder;
-  auto handshake_confirm = NetProtocol::Handshake::CreateHandshake(
-      builder, NetProtocol::Handshake::Endpoint::Server, port,
-      heartbeat_interval);
-  builder.FinishSizePrefixed(handshake_confirm);
+  auto handshake_confirm = NetProtocol::CreateHandshake(
+      builder, NetProtocol::Endpoint::Server, port, heartbeat_interval);
+  auto packet =
+      NetProtocol::CreatePacket(builder, NetProtocol::PacketContent::Handshake,
+                                handshake_confirm.Union());
+  builder.FinishSizePrefixed(packet);
 
   int sent =
       send_all(client.ctrl_fd(), builder.GetBufferPointer(), builder.GetSize());

@@ -8,7 +8,7 @@ use std::{
 use argh::FromArgs;
 use color_eyre::eyre::WrapErr;
 
-use flatbuffers_structs::handshake::net_protocol::handshake::{Endpoint, HandshakeArgs};
+use flatbuffers_structs::net_protocol::{Endpoint, HandshakeArgs};
 use protocol::connection::Connection;
 use vita_virtual_device::{VitaDevice, VitaVirtualDevice};
 
@@ -41,7 +41,7 @@ fn filter_udp_nonblocking_error(
 fn main() -> color_eyre::Result<()> {
     const NET_PORT: u16 = 5000;
     const TIMEOUT: Duration = Duration::from_secs(25);
-    const BUFFER_SIZE: usize = 2048;
+    const BUFFER_SIZE: usize = 4196;
     const POLLING_RATE: u64 = 1 * 1000 / 250;
 
     color_eyre::install()?;
@@ -89,19 +89,20 @@ fn main() -> color_eyre::Result<()> {
 
     let mut buf = [0; BUFFER_SIZE];
 
-    ctrl_socket
+    let len = ctrl_socket
         .read(&mut buf)
         .wrap_err("Failed to read handshake response from Vita")?;
 
     log::info!("Handshake response received from Vita");
 
-    conn.receive_data(&buf);
+    conn.receive_data(&buf[..len]);
     let event = conn
         .events()
         .next()
         .expect("No handshake response received");
     let handshake_response = match event {
-        protocol::events::Event::HandshakeResponseReceived { handshake } => handshake,
+        Ok(protocol::events::Event::HandshakeResponseReceived { handshake }) => handshake,
+        Err(e) => return Err(e).wrap_err("Failed to receive handshake response from Vita"),
         _ => unimplemented!("Unexpected event received"),
     };
     let heartbeat_freq = handshake_response.heartbeat_freq;
@@ -157,24 +158,28 @@ fn main() -> color_eyre::Result<()> {
             .wrap_err("Failed to receive data from Vita")?;
         log::debug!("Received {len} bytes from Vita");
 
-        if len == 0 {
-            continue;
-        }
-
         let received_data = &buf[..len];
 
-        log::trace!("Received {len} bytes from Vita: {received_data:?}");
+        log::trace!("Received bytes from Vita: {received_data:?}");
+
+        if received_data.is_empty() {
+            continue;
+        }
 
         conn.receive_data(received_data);
 
         for event in conn.events() {
             log::debug!("Event received: {event:?}");
-            if let protocol::events::Event::PadDataReceived { data } = event {
-                let report = vita_reports::MainReport::from(data);
-                log::trace!("Sending report to virtual device: {report:?}");
-                device
-                    .send_report(report)
-                    .wrap_err("Failed to send report to virtual device")?;
+            match event {
+                Ok(protocol::events::Event::PadDataReceived { data }) => {
+                    let report = vita_reports::MainReport::from(data);
+                    log::trace!("Sending report to virtual device: {report:?}");
+                    device
+                        .send_report(report)
+                        .wrap_err("Failed to send report to virtual device")?;
+                }
+                Err(e) => eprintln!("Error when receiving data from Vita: {e}"),
+                _ => {}
             }
         }
     }

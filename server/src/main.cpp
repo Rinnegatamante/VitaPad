@@ -15,8 +15,9 @@
 #include "ctrl.hpp"
 #include "epoll.hpp"
 #include "net.hpp"
+
 #include <common.h>
-#include <handshake_generated.h>
+#include <netprotocol_generated.h>
 
 #ifdef DEBUG_IP
 #include <debugnet.h>
@@ -78,15 +79,19 @@ static int control_thread(__attribute__((unused)) unsigned int arglen,
     auto data_back = convert_touch_data(builder, touch_data_back);
 
     sceMotionGetSensorState(&motion_data, 1);
-    Pad::Vector3 accel(motion_data.accelerometer.x, motion_data.accelerometer.y,
-                       motion_data.accelerometer.z);
-    Pad::Vector3 gyro(motion_data.gyro.x, motion_data.gyro.y,
-                      motion_data.gyro.z);
-    Pad::MotionData motion(accel, gyro);
+    NetProtocol::Vector3 accel(motion_data.accelerometer.x,
+                               motion_data.accelerometer.y,
+                               motion_data.accelerometer.z);
+    NetProtocol::Vector3 gyro(motion_data.gyro.x, motion_data.gyro.y,
+                              motion_data.gyro.z);
+    NetProtocol::MotionData motion(accel, gyro);
 
-    auto packet =
-        Pad::CreateMainPacket(builder, &buttons, pad.lx, pad.ly, pad.rx, pad.ry,
-                              data_front, data_back, &motion, pad.timeStamp);
+    auto content = NetProtocol::CreatePad(builder, &buttons, pad.lx, pad.ly,
+                                          pad.rx, pad.ry, data_front, data_back,
+                                          &motion, pad.timeStamp);
+
+    auto packet = NetProtocol::CreatePacket(
+        builder, NetProtocol::PacketContent::Pad, content.Union());
     builder.FinishSizePrefixed(packet);
 
     offset_t size = builder.GetSize();
@@ -277,7 +282,7 @@ static int main_thread(__attribute__((unused)) unsigned int arglen,
                        static_cast<void *>(&client_addr_in->sin_addr), ip,
                        sizeof(ip));
 
-        debugNetPrintf(DEBUG, "Address: %s:%d, state: %d, last polling: %ld\n",
+        debugNetPrintf(DEBUG, "Address: %s:%d, state: %d, last polling: %llu\n",
                        ip, sceNetNtohs(client_addr_in->sin_port),
                        client->state(), client->time_since_last_sent_data());
       }

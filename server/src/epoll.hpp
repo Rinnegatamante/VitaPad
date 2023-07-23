@@ -13,8 +13,8 @@
 
 #include "heartbeat.hpp"
 #define FLATBUFFERS_TRACK_VERIFIER_BUFFER_SIZE
-#include <config_generated.h>
-#include <handshake_generated.h>
+
+#include <netprotocol_generated.h>
 
 constexpr unsigned int MIN_POLLING_INTERVAL_MICROS = (1 * 1000 / 250) * 1000;
 
@@ -125,14 +125,35 @@ public:
     }
   }
 
-  bool handle_handshake() {
+  bool handle_data() {
+    typedef void (ClientData::*buffer_handler)(const void *);
+
     flatbuffers::Verifier verifier(buffer_.data(), buffer_.size());
 
-    if (!NetProtocol::Handshake::VerifySizePrefixedHandshakeBuffer(verifier))
+    if (!NetProtocol::VerifySizePrefixedPacketBuffer(verifier))
       return false;
 
-    auto handshake =
-        NetProtocol::Handshake::GetSizePrefixedHandshake(buffer_.data());
+    auto data = NetProtocol::GetSizePrefixedPacket(buffer_.data());
+
+    std::unordered_map<NetProtocol::PacketContent, buffer_handler> handlers = {
+        {NetProtocol::PacketContent::Handshake, &ClientData::handle_handshake},
+        {NetProtocol::PacketContent::Config, &ClientData::handle_config},
+    };
+
+    auto handler_entry = handlers.find(data->content_type());
+    if (handler_entry == handlers.end())
+      return false;
+    auto [_, handler] = *handler_entry;
+
+    std::invoke(handler, this, data->content());
+
+    auto size = verifier.GetComputedSize();
+    buffer_.erase(buffer_.begin(), buffer_.begin() + size);
+    return true;
+  }
+
+  void handle_handshake(const void *buffer) {
+    auto handshake = static_cast<NetProtocol::Handshake const *>(buffer);
 
     SceNetSockaddrIn clientaddr;
     unsigned int addrlen = sizeof(clientaddr);
@@ -143,27 +164,13 @@ public:
     auto addr = reinterpret_cast<SceNetSockaddr *>(&clientaddr);
     set_data_conn_info(*addr);
     set_state(ClientData::State::WaitingForServerConfirm);
-
-    auto size = verifier.GetComputedSize();
-    buffer_.erase(buffer_.begin(), buffer_.begin() + size);
-    return true;
   }
 
-  bool handle_config() {
-    flatbuffers::Verifier verifier(buffer_.data(), buffer_.size());
-
-    if (!NetProtocol::Config::VerifySizePrefixedConfigPacketBuffer(verifier))
-      return false;
-
-    auto config =
-        NetProtocol::Config::GetSizePrefixedConfigPacket(buffer_.data());
+  void handle_config(const void *buffer) {
+    auto config = static_cast<NetProtocol::Config const *>(buffer);
 
     if (config->polling_interval() > MIN_POLLING_INTERVAL_MICROS)
       polling_time_ = config->polling_interval();
-
-    auto size = verifier.GetComputedSize();
-    buffer_.erase(buffer_.begin(), buffer_.begin() + size);
-    return true;
   }
 
   bool handle_heartbeat() {
@@ -174,7 +181,7 @@ public:
 
     update_heartbeat_time();
 
-    auto size = heartbeat_magic.size();
+    constexpr auto size = heartbeat_magic.size();
     buffer_.erase(buffer_.begin(), buffer_.begin() + size);
     return true;
   }

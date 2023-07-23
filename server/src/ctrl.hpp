@@ -5,10 +5,10 @@
 #include <psp2/motion.h>
 #include <psp2/touch.h>
 
-#include <pad_generated.h>
+#include <netprotocol_generated.h>
 
-Pad::ButtonsData convert_pad_data(const SceCtrlData &data);
-flatbuffers::Offset<Pad::TouchData>
+NetProtocol::ButtonsData convert_pad_data(const SceCtrlData &data);
+flatbuffers::Offset<NetProtocol::TouchData>
 convert_touch_data(flatbuffers::FlatBufferBuilder &builder,
                    const SceTouchData &data);
 

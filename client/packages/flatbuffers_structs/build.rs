@@ -17,6 +17,7 @@ fn main() -> Result<(), std::io::Error> {
     flatc_rust::run(flatc_rust::Args {
         inputs: &files,
         out_dir: &out_dir,
+        extra: &["--rust-module-root-file"],
         ..Default::default()
     })
 }

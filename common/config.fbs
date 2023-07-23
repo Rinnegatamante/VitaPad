@@ -1,9 +1,0 @@
-namespace NetProtocol.Config;
-
-table ConfigPacket
-{
-    /// Minimal interval in microseconds between sending packets (> 4500us)
-    polling_interval: ulong;
-}
-
-root_type ConfigPacket;

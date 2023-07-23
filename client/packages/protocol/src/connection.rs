@@ -2,8 +2,7 @@ use std::vec::Drain;
 
 use flatbuffers_structs::{
     flatbuffers::{self, FlatBufferBuilder},
-    handshake::net_protocol::handshake::{self, Handshake, HandshakeArgs},
-    pad::pad,
+    net_protocol::{Handshake, HandshakeArgs, Packet, PacketArgs, PacketContent},
 };
 
 use crate::events::Event;
@@ -30,7 +29,14 @@ impl Connection {
     pub fn send_handshake(&mut self, handshake_args: HandshakeArgs) {
         let mut builder = FlatBufferBuilder::new();
         let handshake = Handshake::create(&mut builder, &handshake_args);
-        builder.finish_size_prefixed(handshake, None);
+        let packet = Packet::create(
+            &mut builder,
+            &PacketArgs {
+                content_type: PacketContent::Handshake,
+                content: Some(handshake.as_union_value()),
+            },
+        );
+        builder.finish_size_prefixed(packet, None);
 
         self.outgoing_buffer
             .extend_from_slice(builder.finished_data());
@@ -42,6 +48,7 @@ impl Connection {
     }
 
     pub fn receive_data(&mut self, data: &[u8]) {
+        dbg!(data.len());
         self.incoming_buffer.extend_from_slice(data);
     }
 
@@ -54,8 +61,14 @@ pub struct ConnectionEvents<'a> {
     data: &'a mut Vec<u8>,
 }
 
+#[derive(Debug, Clone, PartialEq, thiserror::Error)]
+pub enum ConnectionEventsError {
+    #[error("Invalid packet: {0}")]
+    InvalidPacket(flatbuffers::InvalidFlatbuffer),
+}
+
 impl<'a> Iterator for ConnectionEvents<'a> {
-    type Item = Event;
+    type Item = Result<Event, ConnectionEventsError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         const OFFSET_SIZE: usize = std::mem::size_of::<flatbuffers::UOffsetT>();
@@ -67,29 +80,40 @@ impl<'a> Iterator for ConnectionEvents<'a> {
 
         if self.data.get(..HEARTBEAT_SIZE) == Some(crate::HEARTBEAT_MAGIC) {
             self.data.drain(..HEARTBEAT_SIZE);
-            return Some(Event::HeartbeatReceived);
+            return Some(Ok(Event::HeartbeatReceived));
         }
 
         let size = flatbuffers::UOffsetT::from_le_bytes(
             self.data.get(..OFFSET_SIZE).unwrap().try_into().unwrap(),
         ) as usize;
 
-        if self.data[OFFSET_SIZE..].len() < size {
+        if size == 0 || self.data[OFFSET_SIZE - 1..].len() < size {
             return None;
         }
 
         let buffer: Vec<_> = self.data.drain(..OFFSET_SIZE + size).collect();
+        let packet = match flatbuffers_structs::net_protocol::size_prefixed_root_as_packet(&buffer)
+            .map_err(ConnectionEventsError::InvalidPacket)
+        {
+            Ok(packet) => packet,
+            Err(e) => return Some(Err(e)),
+        };
 
-        pad::size_prefixed_root_as_main_packet(&buffer)
-            .map(|data| Event::PadDataReceived { data: data.into() })
-            .or_else(|_| {
-                handshake::size_prefixed_root_as_handshake(&buffer).map(|handshake| {
-                    Event::HandshakeResponseReceived {
-                        handshake: handshake.into(),
-                    }
-                })
-            })
-            .ok()
+        match packet.content_type() {
+            PacketContent::Handshake => {
+                let handshake = packet.content_as_handshake()?;
+                Some(Ok(Event::HandshakeResponseReceived {
+                    handshake: handshake.into(),
+                }))
+            }
+            PacketContent::Pad => {
+                let pad = packet.content_as_pad()?;
+                Some(Ok(Event::PadDataReceived {
+                    data: pad.try_into().ok()?,
+                }))
+            }
+            _ => None,
+        }
     }
 }
 
@@ -97,11 +121,19 @@ impl<'a> Iterator for ConnectionEvents<'a> {
 mod tests {
     use super::*;
     use crate::events;
+    use flatbuffers_structs::net_protocol::Endpoint;
 
     fn create_handshake(args: HandshakeArgs) -> Vec<u8> {
         let mut builder = FlatBufferBuilder::new();
         let handshake = Handshake::create(&mut builder, &args);
-        builder.finish_size_prefixed(handshake, None);
+        let packet = Packet::create(
+            &mut builder,
+            &PacketArgs {
+                content_type: PacketContent::Handshake,
+                content: Some(handshake.as_union_value()),
+            },
+        );
+        builder.finish_size_prefixed(packet, None);
         builder.finished_data().to_vec()
     }
 
@@ -110,7 +142,7 @@ mod tests {
         let mut connection = Connection::new();
 
         connection.send_handshake(HandshakeArgs {
-            endpoint: handshake::Endpoint::Client,
+            endpoint: Endpoint::Client,
             port: 1234,
             heartbeat_freq: 1000,
         });
@@ -120,7 +152,7 @@ mod tests {
         let actual_buffer = connection.retrieve_out_data().collect::<Vec<_>>();
 
         let expected_handshake = create_handshake(HandshakeArgs {
-            endpoint: handshake::Endpoint::Client,
+            endpoint: Endpoint::Client,
             port: 1234,
             heartbeat_freq: 1000,
         });
@@ -137,7 +169,7 @@ mod tests {
         let mut connection = Connection::new();
 
         let handshake_client = create_handshake(HandshakeArgs {
-            endpoint: handshake::Endpoint::Client,
+            endpoint: Endpoint::Client,
             port: 1234,
             heartbeat_freq: 1000,
         });
@@ -148,13 +180,13 @@ mod tests {
 
             assert_eq!(
                 events.next(),
-                Some(Event::HandshakeResponseReceived {
+                Some(Ok(Event::HandshakeResponseReceived {
                     handshake: events::Handshake {
-                        endpoint: handshake::Endpoint::Client,
+                        endpoint: Endpoint::Client,
                         port: 1234,
                         heartbeat_freq: 1000,
                     }
-                }),
+                })),
                 "HandshakeResponseReceived event should be emitted"
             );
         }
@@ -162,7 +194,7 @@ mod tests {
         connection.receive_data(crate::HEARTBEAT_MAGIC);
 
         let handshake_server = create_handshake(HandshakeArgs {
-            endpoint: handshake::Endpoint::Server,
+            endpoint: Endpoint::Server,
             port: 1234,
             heartbeat_freq: 1000,
         });
@@ -173,18 +205,18 @@ mod tests {
 
             assert_eq!(
                 events.next(),
-                Some(Event::HeartbeatReceived),
+                Some(Ok(Event::HeartbeatReceived)),
                 "HeartbeatReceived event should be emitted"
             );
             assert_eq!(
                 events.next(),
-                Some(Event::HandshakeResponseReceived {
+                Some(Ok(Event::HandshakeResponseReceived {
                     handshake: events::Handshake {
-                        endpoint: handshake::Endpoint::Server,
+                        endpoint: Endpoint::Server,
                         port: 1234,
                         heartbeat_freq: 1000,
                     }
-                }),
+                })),
                 "HandshakeResponseReceived event should be emitted"
             );
             assert_eq!(events.next(), None, "No more events should be emitted");
@@ -196,13 +228,13 @@ mod tests {
         let mut connection = Connection::new();
 
         let handshake_client = create_handshake(HandshakeArgs {
-            endpoint: handshake::Endpoint::Client,
+            endpoint: Endpoint::Client,
             port: 1234,
             heartbeat_freq: 1000,
         });
 
         let handshake_server = create_handshake(HandshakeArgs {
-            endpoint: handshake::Endpoint::Server,
+            endpoint: Endpoint::Server,
             port: 1234,
             heartbeat_freq: 1000,
         });
@@ -214,31 +246,31 @@ mod tests {
 
         assert_eq!(
             events.next(),
-            Some(Event::HandshakeResponseReceived {
+            Some(Ok(Event::HandshakeResponseReceived {
                 handshake: events::Handshake {
-                    endpoint: handshake::Endpoint::Client,
+                    endpoint: Endpoint::Client,
                     port: 1234,
                     heartbeat_freq: 1000,
                 }
-            }),
+            })),
             "HandshakeResponseReceived event should be emitted"
         );
 
         assert_eq!(
             events.next(),
-            Some(Event::HeartbeatReceived),
+            Some(Ok(Event::HeartbeatReceived)),
             "HeartbeatReceived event should be emitted"
         );
 
         assert_eq!(
             events.next(),
-            Some(Event::HandshakeResponseReceived {
+            Some(Ok(Event::HandshakeResponseReceived {
                 handshake: events::Handshake {
-                    endpoint: handshake::Endpoint::Server,
+                    endpoint: Endpoint::Server,
                     port: 1234,
                     heartbeat_freq: 1000,
                 }
-            }),
+            })),
             "HandshakeResponseReceived event should be emitted"
         );
 

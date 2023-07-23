@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-flatbuffers = "22.10.26"
+flatbuffers = "23.5.26"
 
 [build-dependencies]
 flatc-rust = "*"

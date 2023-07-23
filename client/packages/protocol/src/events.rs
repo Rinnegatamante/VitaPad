@@ -1,4 +1,4 @@
-use flatbuffers_structs::handshake::net_protocol::handshake::Endpoint;
+use flatbuffers_structs::net_protocol::Endpoint;
 use vita_reports::MainReport;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -8,10 +8,8 @@ pub struct Handshake {
     pub heartbeat_freq: u32,
 }
 
-impl<'a> From<flatbuffers_structs::handshake::net_protocol::handshake::Handshake<'a>>
-    for Handshake
-{
-    fn from(handshake: flatbuffers_structs::handshake::net_protocol::handshake::Handshake) -> Self {
+impl<'a> From<flatbuffers_structs::net_protocol::Handshake<'a>> for Handshake {
+    fn from(handshake: flatbuffers_structs::net_protocol::Handshake) -> Self {
         Self {
             endpoint: handshake.endpoint(),
             port: handshake.port(),

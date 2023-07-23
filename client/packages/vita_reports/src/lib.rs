@@ -15,8 +15,8 @@ pub struct ButtonsData {
     // timestamp: u64;
 }
 
-impl From<flatbuffers_structs::pad::pad::ButtonsData> for ButtonsData {
-    fn from(buttons: flatbuffers_structs::pad::pad::ButtonsData) -> Self {
+impl From<flatbuffers_structs::net_protocol::ButtonsData> for ButtonsData {
+    fn from(buttons: flatbuffers_structs::net_protocol::ButtonsData) -> Self {
         Self {
             select: buttons.select(),
             start: buttons.start(),
@@ -42,8 +42,8 @@ pub struct Vector3 {
     pub z: f32,
 }
 
-impl From<&flatbuffers_structs::pad::pad::Vector3> for Vector3 {
-    fn from(vector: &flatbuffers_structs::pad::pad::Vector3) -> Self {
+impl From<&flatbuffers_structs::net_protocol::Vector3> for Vector3 {
+    fn from(vector: &flatbuffers_structs::net_protocol::Vector3) -> Self {
         Self {
             x: vector.x(),
             y: vector.y(),
@@ -59,8 +59,8 @@ pub struct MotionData {
     // timestamp: u64,
 }
 
-impl From<flatbuffers_structs::pad::pad::MotionData> for MotionData {
-    fn from(motion: flatbuffers_structs::pad::pad::MotionData) -> Self {
+impl From<flatbuffers_structs::net_protocol::MotionData> for MotionData {
+    fn from(motion: flatbuffers_structs::net_protocol::MotionData) -> Self {
         Self {
             gyro: motion.gyro().into(),
             accelerometer: motion.accelerometer().into(),
@@ -77,8 +77,8 @@ pub struct TouchReport {
     pub force: u8,
 }
 
-impl From<flatbuffers_structs::pad::pad::TouchReport> for TouchReport {
-    fn from(touch: flatbuffers_structs::pad::pad::TouchReport) -> Self {
+impl From<flatbuffers_structs::net_protocol::TouchReport> for TouchReport {
+    fn from(touch: flatbuffers_structs::net_protocol::TouchReport) -> Self {
         Self {
             x: touch.x(),
             y: touch.y(),
@@ -93,8 +93,8 @@ pub struct TouchData {
     pub reports: Vec<TouchReport>,
 }
 
-impl<'a> From<flatbuffers_structs::pad::pad::TouchData<'a>> for TouchData {
-    fn from(touch: flatbuffers_structs::pad::pad::TouchData) -> Self {
+impl<'a> From<flatbuffers_structs::net_protocol::TouchData<'a>> for TouchData {
+    fn from(touch: flatbuffers_structs::net_protocol::TouchData) -> Self {
         Self {
             reports: touch
                 .reports()
@@ -120,15 +120,20 @@ pub struct MainReport {
     pub timestamp: u64,
 }
 
-// TODO: Fallible conversion?
-impl<'a> From<flatbuffers_structs::pad::pad::MainPacket<'a>> for MainReport {
-    fn from(packet: flatbuffers_structs::pad::pad::MainPacket) -> Self {
-        let buttons = *packet.buttons().expect("Buttons data is missing");
-        let front_touch = packet.front_touch().expect("Front touch data is missing");
-        let back_touch = packet.back_touch().expect("Back touch data is missing");
-        let motion = *packet.motion().expect("Motion data is missing");
+impl<'a> TryFrom<flatbuffers_structs::net_protocol::Pad<'a>> for MainReport {
+    type Error = &'static str;
 
-        Self {
+    fn try_from(packet: flatbuffers_structs::net_protocol::Pad) -> Result<Self, Self::Error> {
+        let buttons = *packet.buttons().ok_or_else(|| "Buttons data is missing")?;
+        let front_touch = packet
+            .front_touch()
+            .ok_or_else(|| "Front touch data is missing")?;
+        let back_touch = packet
+            .back_touch()
+            .ok_or_else(|| "Back touch data is missing")?;
+        let motion = *packet.motion().ok_or_else(|| "Motion data is missing")?;
+
+        Ok(Self {
             buttons: buttons.into(),
             front_touch: front_touch.into(),
             back_touch: back_touch.into(),
@@ -138,6 +143,6 @@ impl<'a> From<flatbuffers_structs::pad::pad::MainPacket<'a>> for MainReport {
             ly: packet.ly(),
             rx: packet.rx(),
             ry: packet.ry(),
-        }
+        })
     }
 }

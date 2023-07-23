@@ -5,4 +5,5 @@ edition = "2021"
 
 [dependencies]
 flatbuffers_structs = { path = "../flatbuffers_structs" }
+thiserror = "1.0.44"
 vita_reports = { path = "../vita_reports" }

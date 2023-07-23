@@ -1,5 +1,25 @@
-namespace Pad;
+namespace NetProtocol;
 
+// Handshake
+enum Endpoint : ubyte {
+    Client,
+    Server,
+}
+
+table Handshake {
+    endpoint: Endpoint;
+    port: ushort;
+    heartbeat_freq: uint;
+}
+
+// Config
+table Config
+{
+    /// Minimal interval in microseconds between sending packets (> 4500us)
+    polling_interval: ulong;
+}
+
+// Pad
 struct ButtonsData
 {
     select: bool;
@@ -43,7 +63,7 @@ table TouchData
     reports: [TouchReport];
 }
 
-table MainPacket
+table Pad
 {
     buttons: ButtonsData;
     lx: ubyte;
@@ -56,4 +76,15 @@ table MainPacket
     timestamp: ulong;
 }
 
-root_type MainPacket;
+// Packet
+union PacketContent {
+   Config,
+   Handshake,
+   Pad 
+}
+
+table Packet {
+    content: PacketContent;
+}
+
+root_type Packet;
