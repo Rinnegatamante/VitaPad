@@ -2,7 +2,7 @@ use std::vec::Drain;
 
 use flatbuffers_structs::{
     flatbuffers::{self, FlatBufferBuilder},
-    net_protocol::{Handshake, HandshakeArgs, Packet, PacketArgs, PacketContent},
+    net_protocol::{Handshake, Config, ConfigArgs, HandshakeArgs, Packet, PacketArgs, PacketContent},
 };
 
 use crate::events::Event;
@@ -34,6 +34,22 @@ impl Connection {
             &PacketArgs {
                 content_type: PacketContent::Handshake,
                 content: Some(handshake.as_union_value()),
+            },
+        );
+        builder.finish_size_prefixed(packet, None);
+
+        self.outgoing_buffer
+            .extend_from_slice(builder.finished_data());
+    }
+
+    pub fn send_config(&mut self, config_args: ConfigArgs) {
+        let mut builder = FlatBufferBuilder::new();
+        let config = Config::create(&mut builder, &config_args);
+        let packet = Packet::create(
+            &mut builder,
+            &PacketArgs {
+                content_type: PacketContent::Config,
+                content: Some(config.as_union_value()),
             },
         );
         builder.finish_size_prefixed(packet, None);
