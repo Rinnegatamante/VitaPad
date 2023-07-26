@@ -61,6 +61,7 @@ jobs:
         run: |
           git clone https://github.com/musikid/packages
           cd packages/flatbuffers
+          echo $PATH
           vita-makepkg -C -f -d -i
 
       - name: Build
