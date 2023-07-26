@@ -47,18 +47,15 @@ jobs:
           make -j
           sudo make install
 
-          echo "VITASDK=/usr/local/vitasdk" >> $GITHUB_ENV
-          echo "PATH=$VITASDK/bin:$PATH" >> $GITHUB_ENV
-
       - name: Install VitaSDK
         run: |
           echo "VITASDK=/usr/local/vitasdk" >> $GITHUB_ENV
           echo "PATH=$VITASDK/bin:$PATH" >> $GITHUB_ENV
-          echo $VITASDK
           git clone https://github.com/vitasdk/vdpm
           cd vdpm
-          sudo ./bootstrap-vitasdk.sh
-          sudo ./install-all.sh
+          export VITASDK=/usr/local/vitasdk
+          sudo -E ./bootstrap-vitasdk.sh
+          sudo -E ./install-all.sh
 
       - name: Build
         run: |
