@@ -56,6 +56,12 @@ jobs:
           export VITASDK=/usr/local/vitasdk
           sudo -E ./bootstrap-vitasdk.sh
           sudo -E ./install-all.sh
+      
+      - name: Install flatbuffers
+        run: |
+          git clone https://github.com/musikid/packages
+          cd packages/flatbuffers
+          vita-makepkg -C -f -d -i
 
       - name: Build
         run: |
